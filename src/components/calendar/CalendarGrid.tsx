@@ -128,6 +128,7 @@ export function CalendarGrid({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") abort();
     };
+
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", abort);
@@ -189,6 +190,7 @@ export function CalendarGrid({
               day={day}
               events={events}
               preview={movePreview}
+              createPreview={createPreview}
               currentMinutes={
                 isSameDay(day, now) ? minutesOfDay(now) : undefined
               }

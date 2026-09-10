@@ -1,5 +1,6 @@
 import type { MouseEvent, PointerEvent } from "react";
 import type { CalendarEvent } from "../../types/event";
+import type { CreateSelection } from "../../hooks/useDragToCreate";
 import type { MovePreview } from "../../hooks/useDragToMove";
 import { DAY_HEIGHT, HOUR_HEIGHT } from "../../constants";
 import {
@@ -7,13 +8,14 @@ import {
   layoutEvents,
   minutesToPixels,
 } from "../../utils/layout";
-import { isSameDay } from "../../utils/time";
+import { dateAtMinutes, isSameDay } from "../../utils/time";
 import { EventBlock } from "../event/EventBlock";
 
 interface Props {
   day: Date;
   events: CalendarEvent[];
   preview?: MovePreview | null;
+  createPreview?: CreateSelection | null;
   currentMinutes?: number;
   onEmptyPointerDown: (e: PointerEvent<HTMLDivElement>, day: Date) => void;
   onEventPointerDown: (
@@ -32,6 +34,7 @@ export function DayColumn({
   day,
   events,
   preview,
+  createPreview,
   currentMinutes,
   onEmptyPointerDown,
   onEventPointerDown,
@@ -50,6 +53,25 @@ export function DayColumn({
           column: 0,
           columns: 1,
         }
+      : null;
+  const createPreviewLayout =
+    createPreview && isSameDay(createPreview.day, day)
+      ? (() => {
+          const start = dateAtMinutes(createPreview.day, createPreview.start);
+          const end = dateAtMinutes(createPreview.day, createPreview.end);
+          return {
+            event: {
+              id: "create-preview",
+              title: "New event",
+              description: "",
+              start,
+              end,
+            },
+            ...blockGeometry(start, end),
+            column: 0,
+            columns: 1,
+          };
+        })()
       : null;
   return (
     <div
@@ -75,6 +97,9 @@ export function DayColumn({
         />
       ))}
       {previewLayout && <EventBlock item={previewLayout} isPreview />}
+      {createPreviewLayout && (
+        <EventBlock item={createPreviewLayout} isPreview />
+      )}
       {currentMinutes !== undefined && (
         <div
           aria-hidden="true"
