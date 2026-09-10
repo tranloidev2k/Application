@@ -1,0 +1,48 @@
+{
+  "name": "work-calendar",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "typecheck:e2e": "tsc -p tsconfig.cypress.json",
+    "test:e2e": "start-server-and-test dev http://localhost:5173 cypress:run",
+    "format": "prettier --write \"{src,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
+    "format:check": "prettier --check \"{src,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "cypress": "^15.21.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.9.6",
+    "start-server-and-test": "^3.0.12",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  }
+}
