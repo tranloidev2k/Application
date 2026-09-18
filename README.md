@@ -8,6 +8,17 @@
 2. Mở **SQL Editor**, chạy lần lượt các file trong thư mục `supabase/migrations` theo thứ tự tên file.
 3. Sao chép `.env.example` thành `.env.local` và điền URL cùng publishable key của dự án. Workspace hiện tại đã có sẵn `.env.local` cho dự án được cấu hình.
 
+Khi deploy, thêm hai biến sau vào phần Environment Variables của nền tảng hosting rồi build/deploy lại:
+
+Với Vercel, dùng:
+
+```ini
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+Dự án hỗ trợ cả tiền tố `NEXT_PUBLIC_` trên Vercel và `VITE_` khi chạy Vite trực tiếp. Hãy gán biến cho môi trường **Production** rồi redeploy, vì các giá trị frontend được nhúng tại thời điểm build. Không sử dụng service role key tại đây.
+
 RLS chỉ cho phép phiên anonymous hiện tại đọc và ghi dữ liệu của chính nó. Ứng dụng đồng thời giữ bản sao trong `localStorage`, vì vậy vẫn hoạt động nếu Supabase hoặc mạng tạm thời không khả dụng.
 
 > Phiên anonymous gắn với dữ liệu trình duyệt. Xóa toàn bộ dữ liệu website, đăng xuất hoặc chuyển sang trình duyệt/thiết bị khác sẽ không thể truy cập lại dữ liệu của phiên cũ.

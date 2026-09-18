@@ -1,7 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.NEXT_SUPABASE_URL;
-const supabaseKey = import.meta.env.NEXT_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = (
+  import.meta.env.VITE_SUPABASE_URL ??
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL
+)?.trim();
+const supabaseKey = (
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+)?.trim();
+
+const missingSupabaseConfig =
+  "Thiếu cấu hình Supabase: cần VITE_SUPABASE_* hoặc NEXT_PUBLIC_SUPABASE_*";
 
 export const supabase =
   supabaseUrl && supabaseKey
@@ -14,7 +23,7 @@ export const supabase =
     : null;
 
 export async function ensureAnonymousSession() {
-  if (!supabase) throw new Error("Thiếu cấu hình Supabase");
+  if (!supabase) throw new Error(missingSupabaseConfig);
   const { data: sessionData, error: sessionError } =
     await supabase.auth.getSession();
   if (sessionError) throw sessionError;
