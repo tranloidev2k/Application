@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, ArrowLeft, ArrowRight, BriefcaseBusiness, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, ExternalLink,
-  FileText, Filter, LayoutDashboard, Link2, ListTodo, Mail, MapPin, Menu, MoreHorizontal,
+  FileText, Filter, LayoutDashboard, Link2, ListTodo, Mail, MapPin, Menu,
   NotebookPen, PanelLeftClose, PanelLeftOpen, Pencil, Phone, Plus, Search, Settings, Sparkles, Trash2, UserRound, Video, X,
 } from 'lucide-react'
 import { fetchApplications, isDemoApplication, normalizeApplication, saveApplications } from './lib/applications'
@@ -167,7 +167,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const navigate = useNavigate()
   const route = routeFromPathname(pathname)
-  const { syncState } = useAppData()
   const [mobileNav, setMobileNav] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -181,7 +180,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <Sidebar route={route} navigate={navigate} open={mobileNav} close={() => setMobileNav(false)} collapsed={sidebarCollapsed} toggleCollapsed={() => setSidebarCollapsed(value => !value)} />
       <div className={`app-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        <Topbar onMenu={() => setMobileNav(true)} navigate={navigate} syncState={syncState} />
+        <Topbar onMenu={() => setMobileNav(true)} navigate={navigate} />
         <main>{children}</main>
       </div>
     </div>
@@ -277,23 +276,14 @@ function Sidebar({ route, navigate, open, close, collapsed, toggleCollapsed }: {
       </nav>
       <div className="sidebar-grow" />
       <button className={`nav-item ${route.page === 'account' ? 'active' : ''}`} onClick={() => go('/account')} title={collapsed ? 'Tài khoản' : undefined}><Settings size={19} /><span>Tài khoản</span></button>
-      <div className="demo-user">
-        <span className="avatar">CN</span>
-        <span><strong>Không gian cá nhân</strong></span>
-        <MoreHorizontal size={18} />
-      </div>
     </aside>
   </>
 }
 
-function Topbar({ onMenu, navigate, syncState }: { onMenu: () => void; navigate: (s: string) => void; syncState: SyncState }) {
-  const syncLabel = syncState === 'connected' ? 'Đã lưu DB' : syncState === 'connecting' ? 'Đang kết nối' : 'Lưu cục bộ'
+function Topbar({ onMenu, navigate }: { onMenu: () => void; navigate: (s: string) => void }) {
   return <header className="topbar">
     <button className="icon-button mobile-only" onClick={onMenu} aria-label="Mở menu"><Menu size={22} /></button>
     <div className="topbar-title" />
-    <div className={`demo-chip ${syncState === 'connected' ? 'connected' : ''}`}>
-      {syncState === 'connected' ? <CheckCircle2 size={14} /> : <Clock3 size={14} />} {syncLabel}
-    </div>
     <button className="primary compact" onClick={() => navigate('/applications/new')}><Plus size={18} /> Thêm đơn</button>
   </header>
 }
