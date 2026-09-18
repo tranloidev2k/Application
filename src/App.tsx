@@ -1,12 +1,14 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+'use client'
+
+import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, ArrowLeft, ArrowRight, BriefcaseBusiness, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, ExternalLink,
   FileText, Filter, LayoutDashboard, Link2, ListTodo, Mail, MapPin, Menu, MoreHorizontal,
   NotebookPen, PanelLeftClose, PanelLeftOpen, Pencil, Phone, Plus, Search, Settings, Sparkles, Trash2, UserRound, Video, X,
 } from 'lucide-react'
-import { seedApplications } from './data'
-import { fetchApplications, normalizeApplication, saveApplications } from './lib/applications'
+import { fetchApplications, isDemoApplication, normalizeApplication, saveApplications } from './lib/applications'
 import { ensureAnonymousSession } from './lib/supabase'
 import { Application, Interview, JobTask, Note, Status, STATUSES, STATUS_META } from './types'
 
@@ -22,8 +24,8 @@ const toInputDateTime = (value?: string) => value ? new Date(new Date(value).get
 type Route = { page: 'dashboard' | 'applications' | 'calendar' | 'new' | 'detail' | 'edit' | 'account'; id?: string }
 type SyncState = 'connecting' | 'connected' | 'offline'
 
-function getRoute(): Route {
-  const path = window.location.pathname.replace(/\/$/, '') || '/'
+function routeFromPathname(pathname: string): Route {
+  const path = pathname.replace(/\/$/, '') || '/'
   if (path === '/applications/new') return { page: 'new' }
   if (path === '/calendar') return { page: 'calendar' }
   const detail = path.match(/^\/applications\/([^/]+)$/)
@@ -35,39 +37,58 @@ function getRoute(): Route {
   return { page: 'dashboard' }
 }
 
-function useRouter() {
-  const [route, setRoute] = useState(getRoute)
-  useEffect(() => {
-    const handler = () => setRoute(getRoute())
-    window.addEventListener('popstate', handler)
-    return () => window.removeEventListener('popstate', handler)
-  }, [])
-  const navigate = (to: string) => {
-    window.history.pushState({}, '', to)
-    setRoute(getRoute())
+function useNavigate() {
+  const router = useRouter()
+  return useCallback((to: string) => {
+    router.push(to)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-  return { route, navigate }
+  }, [router])
 }
 
 function loadApps(): Application[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? (JSON.parse(saved) as Application[]).map(normalizeApplication) : seedApplications
-  } catch { return seedApplications }
+    return saved
+      ? (JSON.parse(saved) as Application[]).map(normalizeApplication).filter(application => !isDemoApplication(application))
+      : []
+  } catch { return [] }
 }
 
-export default function App() {
-  const { route, navigate } = useRouter()
-  const [applications, setApplications] = useState<Application[]>(loadApps)
-  const [mobileNav, setMobileNav] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true')
+type AppDataContextValue = {
+  applications: Application[]
+  syncState: SyncState
+  toast: (message: string) => void
+  updateApplication: (id: string, updater: (application: Application) => Application) => void
+  createApplication: (application: Application) => void
+  replaceApplication: (application: Application) => void
+}
+
+const AppDataContext = createContext<AppDataContextValue | null>(null)
+
+function useAppData() {
+  const context = useContext(AppDataContext)
+  if (!context) throw new Error('useAppData must be used inside AppProvider')
+  return context
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [applications, setApplications] = useState<Application[]>([])
+  const [storageReady, setStorageReady] = useState(false)
   const [toast, setToast] = useState('')
   const [databaseUserId, setDatabaseUserId] = useState('')
   const [syncState, setSyncState] = useState<SyncState>('connecting')
+  const [pendingApplications, setPendingApplications] = useState<Record<string, Application>>({})
 
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(applications)), [applications])
-  useEffect(() => localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed)), [sidebarCollapsed])
+  useEffect(() => {
+    const localApplications = loadApps()
+    queueMicrotask(() => {
+      setApplications(localApplications)
+      setStorageReady(true)
+    })
+  }, [])
+  useEffect(() => {
+    if (storageReady) localStorage.setItem(STORAGE_KEY, JSON.stringify(applications))
+  }, [applications, storageReady])
   useEffect(() => {
     let active = true
 
@@ -77,7 +98,7 @@ export default function App() {
         const remoteApplications = await fetchApplications()
         if (!active) return
 
-        if (remoteApplications.length) setApplications(remoteApplications)
+        setApplications(remoteApplications)
         setDatabaseUserId(session.user.id)
         setSyncState('connected')
       } catch (error) {
@@ -92,9 +113,17 @@ export default function App() {
     return () => { active = false }
   }, [])
   useEffect(() => {
-    if (!databaseUserId) return
+    const pending = Object.values(pendingApplications)
+    if (!databaseUserId || !pending.length) return
     const timer = window.setTimeout(() => {
-      void saveApplications(applications, databaseUserId).then(() => {
+      void saveApplications(pending, databaseUserId).then(() => {
+        setPendingApplications(current => {
+          const next = { ...current }
+          pending.forEach(application => {
+            if (next[application.id] === application) delete next[application.id]
+          })
+          return next
+        })
         setSyncState('connected')
       }).catch(error => {
         console.error('Supabase sync failed', error)
@@ -103,7 +132,7 @@ export default function App() {
       })
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [applications, databaseUserId])
+  }, [pendingApplications, databaseUserId])
   useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(''), 2800)
@@ -115,30 +144,104 @@ export default function App() {
     if (!existing) return
     const next = updater(existing)
     setApplications(items => items.map(item => item.id === id ? next : item))
+    setPendingApplications(items => ({ ...items, [next.id]: next }))
   }
 
-  const current = route.id ? applications.find(a => a.id === route.id && !a.deletedAt) : undefined
-  const content = (() => {
-    if (route.page === 'applications') return <ApplicationsPage applications={applications} navigate={navigate} onDelete={id => { updateApplication(id, app => ({ ...app, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })); setToast('Đã xóa đơn ứng tuyển') }} />
-    if (route.page === 'calendar') return <CalendarPage applications={applications} navigate={navigate} updateApplication={updateApplication} toast={setToast} />
-    if (route.page === 'new') return <ApplicationForm applications={applications} onCancel={() => navigate('/applications')} onSave={app => { setApplications(v => [app, ...v]); setToast('Đã tạo đơn ứng tuyển'); navigate(`/applications/${app.id}`) }} />
-    if (route.page === 'edit' && current) return <ApplicationForm application={current} applications={applications} onCancel={() => navigate(`/applications/${current.id}`)} onSave={app => { setApplications(v => v.map(a => a.id === app.id ? app : a)); setToast('Đã lưu thay đổi'); navigate(`/applications/${app.id}`) }} />
-    if (route.page === 'detail' && current) return <ApplicationDetail application={current} update={fn => updateApplication(current.id, fn)} onDelete={() => { updateApplication(current.id, a => ({ ...a, deletedAt: new Date().toISOString() })); setToast('Đã xóa đơn ứng tuyển'); navigate('/applications') }} navigate={navigate} toast={setToast} />
-    if (route.page === 'detail' || route.page === 'edit') return <NotFound navigate={navigate} />
-    if (route.page === 'account') return <AccountPage syncState={syncState} />
-    return <Dashboard applications={applications} navigate={navigate} />
-  })()
+  const createApplication = (application: Application) => {
+    setApplications(items => [application, ...items])
+    setPendingApplications(items => ({ ...items, [application.id]: application }))
+  }
+
+  const replaceApplication = (application: Application) => {
+    setApplications(items => items.map(item => item.id === application.id ? application : item))
+    setPendingApplications(items => ({ ...items, [application.id]: application }))
+  }
+
+  return <AppDataContext.Provider value={{ applications, syncState, toast: setToast, updateApplication, createApplication, replaceApplication }}>
+    {children}
+    {toast && <div className="toast"><CheckCircle2 size={18} />{toast}</div>}
+  </AppDataContext.Provider>
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname()
+  const navigate = useNavigate()
+  const route = routeFromPathname(pathname)
+  const { syncState } = useAppData()
+  const [mobileNav, setMobileNav] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  useEffect(() => {
+    const collapsed = localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true'
+    queueMicrotask(() => setSidebarCollapsed(collapsed))
+  }, [])
+  useEffect(() => localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed)), [sidebarCollapsed])
 
   return (
     <div className="app-shell">
       <Sidebar route={route} navigate={navigate} open={mobileNav} close={() => setMobileNav(false)} collapsed={sidebarCollapsed} toggleCollapsed={() => setSidebarCollapsed(value => !value)} />
       <div className={`app-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Topbar onMenu={() => setMobileNav(true)} navigate={navigate} syncState={syncState} />
-        <main>{content}</main>
+        <main>{children}</main>
       </div>
-      {toast && <div className="toast"><CheckCircle2 size={18} />{toast}</div>}
     </div>
   )
+}
+
+export function DashboardRoute() {
+  const { applications } = useAppData()
+  return <Dashboard applications={applications} navigate={useNavigate()} />
+}
+
+export function ApplicationsRoute() {
+  const { applications, updateApplication, toast } = useAppData()
+  return <ApplicationsPage applications={applications} navigate={useNavigate()} onDelete={id => {
+    updateApplication(id, application => ({ ...application, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
+    toast('Đã xóa đơn ứng tuyển')
+  }} />
+}
+
+export function CalendarRoute() {
+  const { applications, updateApplication, toast } = useAppData()
+  return <CalendarPage applications={applications} navigate={useNavigate()} updateApplication={updateApplication} toast={toast} />
+}
+
+export function NewApplicationRoute() {
+  const navigate = useNavigate()
+  const { applications, createApplication, toast } = useAppData()
+  return <ApplicationForm applications={applications} onCancel={() => navigate('/applications')} onSave={application => {
+    createApplication(application)
+    toast('Đã tạo đơn ứng tuyển')
+    navigate(`/applications/${application.id}`)
+  }} />
+}
+
+export function EditApplicationRoute({ id }: { id: string }) {
+  const navigate = useNavigate()
+  const { applications, replaceApplication, toast } = useAppData()
+  const application = applications.find(item => item.id === id && !item.deletedAt)
+  if (!application) return <NotFound navigate={navigate} />
+  return <ApplicationForm application={application} applications={applications} onCancel={() => navigate(`/applications/${id}`)} onSave={next => {
+    replaceApplication(next)
+    toast('Đã lưu thay đổi')
+    navigate(`/applications/${next.id}`)
+  }} />
+}
+
+export function ApplicationDetailRoute({ id }: { id: string }) {
+  const navigate = useNavigate()
+  const { applications, updateApplication, toast } = useAppData()
+  const application = applications.find(item => item.id === id && !item.deletedAt)
+  if (!application) return <NotFound navigate={navigate} />
+  return <ApplicationDetail application={application} update={updater => updateApplication(id, updater)} onDelete={() => {
+    updateApplication(id, item => ({ ...item, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
+    toast('Đã xóa đơn ứng tuyển')
+    navigate('/applications')
+  }} navigate={navigate} toast={toast} />
+}
+
+export function AccountRoute() {
+  return <AccountPage syncState={useAppData().syncState} />
 }
 
 function Logo() {
@@ -265,8 +368,7 @@ const calendarDateKey = (value: Date | string) => {
   const date = typeof value === 'string' ? new Date(value) : value
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
-const calendarStateFromUrl = () => {
-  const params = new URLSearchParams(window.location.search)
+const calendarStateFromParams = (params: { get: (name: string) => string | null }) => {
   const view: CalendarView = params.get('view') === 'month' ? 'month' : 'week'
   const dateValue = params.get('date')
   const parsedDate = dateValue ? new Date(`${dateValue}T12:00:00`) : new Date()
@@ -280,8 +382,9 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
   updateApplication: (id: string, updater: (app: Application) => Application) => void
   toast: (message: string) => void
 }) {
-  const [cursor, setCursor] = useState(() => calendarStateFromUrl().cursor)
-  const [view, setView] = useState<CalendarView>(() => calendarStateFromUrl().view)
+  const searchParams = useSearchParams()
+  const [cursor, setCursor] = useState(() => calendarStateFromParams(searchParams).cursor)
+  const [view, setView] = useState<CalendarView>(() => calendarStateFromParams(searchParams).view)
   const [createDate, setCreateDate] = useState<Date | null>(null)
   const [createEndDate, setCreateEndDate] = useState<Date | null>(null)
   const [draggingEvent, setDraggingEvent] = useState<CalendarEvent | null>(null)
@@ -349,7 +452,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
 
   useEffect(() => {
     const restoreCalendarState = () => {
-      const state = calendarStateFromUrl()
+      const state = calendarStateFromParams(new URLSearchParams(window.location.search))
       setView(state.view)
       setCursor(state.cursor)
     }
@@ -736,7 +839,7 @@ function PanelHeader({ title, action, onAction }: { title: string; action: strin
 function EmptyMini({ icon, text }: { icon: ReactNode; text: string }) { return <div className="empty-mini"><span>{icon}</span><p>{text}</p></div> }
 
 function ApplicationsPage({ applications, navigate, onDelete }: { applications: Application[]; navigate: (s: string) => void; onDelete: (id: string) => void }) {
-  const params = new URLSearchParams(window.location.search)
+  const params = useSearchParams()
   const [query, setQuery] = useState(params.get('q') || '')
   const [status, setStatus] = useState(params.get('status') || '')
   const [source, setSource] = useState(params.get('source') || '')

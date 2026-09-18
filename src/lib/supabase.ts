@@ -1,16 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = (
-  import.meta.env.VITE_SUPABASE_URL ??
-  import.meta.env.NEXT_PUBLIC_SUPABASE_URL
-)?.trim();
-const supabaseKey = (
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-)?.trim();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 
 const missingSupabaseConfig =
-  "Thiếu cấu hình Supabase: cần VITE_SUPABASE_* hoặc NEXT_PUBLIC_SUPABASE_*";
+  "Thiếu cấu hình Supabase: cần NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY";
 
 export const supabase =
   supabaseUrl && supabaseKey

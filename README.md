@@ -17,11 +17,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
-Dự án hỗ trợ cả tiền tố `NEXT_PUBLIC_` trên Vercel và `VITE_` khi chạy Vite trực tiếp. Hãy gán biến cho môi trường **Production** rồi redeploy, vì các giá trị frontend được nhúng tại thời điểm build. Không sử dụng service role key tại đây.
+Hãy gán biến cho môi trường **Production** rồi redeploy, vì các giá trị `NEXT_PUBLIC_` được nhúng tại thời điểm build. Không sử dụng service role key tại đây.
 
-RLS chỉ cho phép phiên anonymous hiện tại đọc và ghi dữ liệu của chính nó. Ứng dụng đồng thời giữ bản sao trong `localStorage`, vì vậy vẫn hoạt động nếu Supabase hoặc mạng tạm thời không khả dụng.
+Ứng dụng dùng một workspace cá nhân chung để dữ liệu có thể xuất hiện trên cả máy local và bản deploy Vercel mà không cần màn hình đăng nhập. Ứng dụng đồng thời giữ bản sao trong `localStorage`, vì vậy vẫn hoạt động nếu Supabase hoặc mạng tạm thời không khả dụng.
 
-> Phiên anonymous gắn với dữ liệu trình duyệt. Xóa toàn bộ dữ liệu website, đăng xuất hoặc chuyển sang trình duyệt/thiết bị khác sẽ không thể truy cập lại dữ liệu của phiên cũ.
+> Vì không có đăng nhập, mọi người có quyền truy cập URL ứng dụng đều có thể đọc và thay đổi workspace. Không chia sẻ URL deployment nếu dữ liệu cần được giữ riêng tư.
 
 ## Chạy dự án
 
@@ -39,5 +39,9 @@ Kiểm tra bản production:
 ```bash
 npm run lint
 npm run build
-npm run preview
+npm run start
 ```
+
+## Cấu trúc route
+
+Dự án sử dụng Next.js App Router. Mỗi URL được khai báo bằng thư mục riêng trong `app/`, gồm dashboard, calendar, tài khoản và các route danh sách/tạo/chi tiết/sửa đơn ứng tuyển.
