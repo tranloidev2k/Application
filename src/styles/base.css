@@ -1,0 +1,21 @@
+/* ==== 2. Base & a11y ==================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-family: var(--font-sans); font-synthesis: none; color: var(--text); background: var(--bg); }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); font-weight: 400; }
+button, input, select, textarea { font: inherit; }
+button { color: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+h1, h2, h3, p { margin-top: 0; }
+h1, h2, h3 { font-family: var(--font-sans); font-weight: 600; }
+strong { font-weight: 500; }
+
+/* One focus ring for every interactive element. Zero specificity, so never set outline elsewhere
+   unless a replacement ring is provided (see .search-box, .select-control and .field). */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Full-bleed rows and cells draw the ring inside their own box. */
+.schedule-item:focus-visible, .task-row:focus-visible, .table-row:focus-visible, .calendar-day:focus-visible, .week-event:focus-visible,
+.week-header > button:focus-visible, .tabs button:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.danger-text { color: var(--danger) !important; }
+

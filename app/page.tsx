@@ -1,4 +1,4 @@
-import { DashboardRoute } from '../src/App'
+import { DashboardRoute } from '../src/features/dashboard/DashboardRoute'
 
 export default function Page() {
   return <DashboardRoute />

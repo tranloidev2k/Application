@@ -1,6 +1,17 @@
 import type { Metadata } from 'next'
-import { AppProvider, AppShell } from '../src/App'
-import '../src/styles.css'
+import { AppShell } from '../src/components/layout/AppShell'
+import { AppProvider } from '../src/context/AppDataContext'
+import '../src/styles/tokens.css'
+import '../src/styles/base.css'
+import '../src/styles/layout.css'
+import '../src/styles/components.css'
+import '../src/styles/dashboard.css'
+import '../src/styles/applications.css'
+import '../src/styles/form.css'
+import '../src/styles/detail.css'
+import '../src/styles/calendar.css'
+import '../src/styles/account.css'
+import '../src/styles/motion.css'
 
 export const metadata: Metadata = {
   title: 'Trackly — Quản lý ứng tuyển',

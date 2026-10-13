@@ -1,0 +1,21 @@
+/* ---- 5.6 Account ---- */
+.account-page { max-width: 900px; }
+.account-card { overflow: hidden; }
+.profile-head { padding: 27px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); }
+.profile-head h2 { margin-bottom: 3px; font-size: var(--fs-md); }
+.profile-head p { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.profile-head .demo-chip { margin-left: auto; }
+.big-avatar { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-weight: 600; }
+.account-row { padding: 20px 27px; display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; gap: 25px; border-bottom: 1px solid var(--line); }
+.account-row:last-child { border-bottom: 0; }
+.account-row strong, .account-row small { display: block; }
+.account-row strong { color: var(--text-muted); font-size: var(--fs-sm); font-weight: 500; }
+.account-row small { margin-top: 3px; color: var(--muted); font-size: var(--fs-sm); }
+.account-row > span { color: var(--text); font-size: var(--fs-base); text-align: left; }
+
+@media (max-width: 580px) {
+  .profile-head { padding: 20px; flex-wrap: wrap; }
+  .profile-head .demo-chip { margin-left: 0; }
+  .account-row { padding: 18px 20px; grid-template-columns: 1fr; align-items: start; gap: 8px; }
+}
+
