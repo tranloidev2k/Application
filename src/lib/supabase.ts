@@ -16,7 +16,7 @@ export const supabase =
       })
     : null;
 
-export async function ensureAnonymousSession() {
+async function getOrCreateSession() {
   if (!supabase) throw new Error(missingSupabaseConfig);
   const { data: sessionData, error: sessionError } =
     await supabase.auth.getSession();
@@ -27,4 +27,15 @@ export async function ensureAnonymousSession() {
   if (error) throw error;
   if (!data.session) throw new Error("Không thể tạo phiên cá nhân");
   return data.session;
+}
+
+let pendingSession: ReturnType<typeof getOrCreateSession> | null = null;
+
+// Shares one in-flight request so parallel callers do not create two
+// anonymous users on the first visit.
+export function ensureAnonymousSession() {
+  pendingSession ??= getOrCreateSession().finally(() => {
+    pendingSession = null;
+  });
+  return pendingSession;
 }

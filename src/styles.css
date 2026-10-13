@@ -651,3 +651,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .priority-metrics .metric-card.priority-medium strong { color: #18181b; }
 .priority-metrics .metric-card.priority-high small,
 .priority-metrics .metric-card.priority-medium small { color: #71717a; }
+.calendar-event.personal { color: #1f4a73; background: #e3eefa; }
+.week-event.personal { border-left-color: #3f78b5; background: #e0ecf8; color: #1f4a73; }
+.calendar-context-icon.personal { color: #2f6599; background: #e1ecf8; }
+.calendar-context-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.calendar-context-buttons button { min-height: 40px; }
+.calendar-event.personal.completed { color: #78877f; background: #eef1ef; }
+.week-event.personal.completed { border-left-color: #98a39d; background: #edf0ee; color: #758079; }

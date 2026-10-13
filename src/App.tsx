@@ -9,8 +9,9 @@ import {
   NotebookPen, PanelLeftClose, PanelLeftOpen, Pencil, Phone, Plus, Search, Settings, Sparkles, Trash2, UserRound, Video, X,
 } from 'lucide-react'
 import { fetchApplications, isDemoApplication, normalizeApplication, saveApplications } from './lib/applications'
+import { deletePersonalTask, fetchPersonalTasks, savePersonalTask } from './lib/personalTasks'
 import { ensureAnonymousSession } from './lib/supabase'
-import { Application, Interview, JobTask, Note, Status, STATUSES, STATUS_META } from './types'
+import { Application, Interview, JobTask, Note, PersonalTask, Status, STATUSES, STATUS_META } from './types'
 
 const STORAGE_KEY = 'trackly-applications-v1'
 const SIDEBAR_STORAGE_KEY = 'trackly-sidebar-collapsed'
@@ -200,6 +201,48 @@ export function ApplicationsRoute() {
   }} />
 }
 
+function usePersonalTasks(toast: (message: string) => void) {
+  const [tasks, setTasks] = useState<PersonalTask[]>([])
+  const latest = useRef(tasks)
+  useEffect(() => { latest.current = tasks }, [tasks])
+  useEffect(() => {
+    let active = true
+    ensureAnonymousSession()
+      .then(fetchPersonalTasks)
+      .then(remote => { if (active) setTasks(remote) })
+      .catch(error => {
+        console.error('Loading personal tasks failed', error)
+        if (active) toast('Không tải được công việc cá nhân từ database')
+      })
+    return () => { active = false }
+  }, [toast])
+
+  // Shows the change immediately and rolls it back if the database rejects it.
+  const change = useCallback(async (next: PersonalTask[], request: () => Promise<void>, success: string) => {
+    const previous = latest.current
+    setTasks(next)
+    try {
+      await ensureAnonymousSession()
+      await request()
+      toast(success)
+    } catch (error) {
+      console.error('Saving personal task failed', error)
+      setTasks(previous)
+      toast('Không lưu được công việc vào database')
+    }
+  }, [toast])
+
+  const save = useCallback((task: PersonalTask, success: string) => {
+    const items = latest.current
+    const next = items.some(item => item.id === task.id) ? items.map(item => item.id === task.id ? task : item) : [...items, task]
+    return change(next, () => savePersonalTask(task), success)
+  }, [change])
+
+  const remove = useCallback((id: string) => change(latest.current.filter(item => item.id !== id), () => deletePersonalTask(id), 'Đã xóa công việc'), [change])
+
+  return { tasks, save, remove }
+}
+
 export function CalendarRoute() {
   const { applications, updateApplication, toast } = useAppData()
   return <CalendarPage applications={applications} navigate={useNavigate()} updateApplication={updateApplication} toast={toast} />
@@ -335,12 +378,15 @@ function Dashboard({ applications, navigate }: { applications: Application[]; na
 type CalendarView = 'month' | 'week'
 type CalendarEvent = {
   id: string
-  kind: 'task' | 'interview'
+  kind: 'task' | 'interview' | 'personal'
   title: string
   startsAt: string
   endsAt?: string
-  application: Application
+  completedAt?: string
+  note?: string
+  application?: Application
   task?: JobTask
+  personal?: PersonalTask
 }
 
 const startOfCalendarWeek = (value: Date) => {
@@ -389,15 +435,31 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
   const weekCreatePreviewRef = useRef<{ day: Date; start: Date; end: Date } | null>(null)
   const didWeekDragRef = useRef(false)
   const didWeekCreateRef = useRef(false)
+  const [editingTask, setEditingTask] = useState<PersonalTask | null>(null)
+  const [deletingTask, setDeletingTask] = useState<PersonalTask | null>(null)
+  const personalTasks = usePersonalTasks(toast)
   const activeApplications = applications.filter(application => !application.deletedAt)
   const todayKey = calendarDateKey(new Date())
-  const events = useMemo<CalendarEvent[]>(() => activeApplications.flatMap(application => [
+  const events = useMemo<CalendarEvent[]>(() => [
+    ...personalTasks.tasks.map(personal => ({
+      id: personal.id,
+      kind: 'personal' as const,
+      title: personal.title,
+      startsAt: personal.startsAt,
+      endsAt: personal.endsAt,
+      completedAt: personal.completedAt,
+      note: personal.note,
+      personal,
+    })),
+    ...activeApplications.flatMap(application => [
     ...application.tasks.filter(task => task.dueAt).map(task => ({
       id: task.id,
       kind: 'task' as const,
       title: task.title,
       startsAt: task.dueAt!,
       endsAt: task.endsAt,
+      completedAt: task.completedAt,
+      note: task.note,
       application,
       task,
     })),
@@ -409,7 +471,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
       endsAt: interview.endsAt,
       application,
     })),
-  ]).sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [activeApplications])
+  ])].sort((a, b) => a.startsAt.localeCompare(b.startsAt)), [activeApplications, personalTasks.tasks])
 
   const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
   const gridStart = startOfCalendarWeek(monthStart)
@@ -459,17 +521,18 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
   }, [eventContext])
 
   const openCreate = useCallback((date = new Date(), endDate?: Date) => {
-    if (!activeApplications.length) {
-      toast('Hãy tạo đơn ứng tuyển trước khi thêm công việc')
-      return
-    }
     const due = new Date(date)
     if (due.getHours() === 0) due.setHours(9)
     setCreateDate(due)
     setCreateEndDate(endDate ?? new Date(due.getTime() + 45 * 60000))
-  }, [activeApplications.length, toast])
+  }, [])
   const toggleTask = (event: CalendarEvent) => {
-    if (!event.task) return
+    if (event.personal) {
+      const completedAt = event.personal.completedAt ? undefined : new Date().toISOString()
+      void personalTasks.save({ ...event.personal, completedAt, updatedAt: new Date().toISOString() }, completedAt ? 'Đã hoàn thành công việc' : 'Đã mở lại công việc')
+      return
+    }
+    if (!event.task || !event.application) return
     const completedAt = event.task.completedAt ? undefined : new Date().toISOString()
     updateApplication(event.application.id, application => ({
       ...application,
@@ -494,16 +557,22 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
   }
   const moveCalendarEvent = useCallback((event: CalendarEvent, target: Date) => {
     const originalStart = new Date(event.startsAt)
-    if (event.kind === 'task') {
+    const application = event.application
+    if (event.personal) {
+      const duration = new Date(event.personal.endsAt).getTime() - originalStart.getTime()
+      void personalTasks.save({ ...event.personal, startsAt: target.toISOString(), endsAt: new Date(target.getTime() + duration).toISOString(), updatedAt: new Date().toISOString() }, 'Đã chuyển lịch công việc')
+    } else if (!application) {
+      return
+    } else if (event.kind === 'task') {
       const duration = event.endsAt ? new Date(event.endsAt).getTime() - originalStart.getTime() : 45 * 60000
-      updateApplication(event.application.id, application => ({
+      updateApplication(application.id, application => ({
         ...application,
         updatedAt: new Date().toISOString(),
         tasks: application.tasks.map(task => task.id === event.id ? { ...task, dueAt: target.toISOString(), endsAt: new Date(target.getTime() + duration).toISOString() } : task),
       }))
     } else {
       const duration = event.endsAt ? new Date(event.endsAt).getTime() - originalStart.getTime() : 60 * 60000
-      updateApplication(event.application.id, application => ({
+      updateApplication(application.id, application => ({
         ...application,
         updatedAt: new Date().toISOString(),
         interviews: application.interviews.map(interview => interview.id === event.id ? {
@@ -515,8 +584,8 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
     }
     setDraggingEvent(null)
     setDropTarget('')
-    toast(event.kind === 'task' ? 'Đã chuyển lịch công việc' : 'Đã chuyển lịch phỏng vấn')
-  }, [toast, updateApplication])
+    if (!event.personal) toast(event.kind === 'task' ? 'Đã chuyển lịch công việc' : 'Đã chuyển lịch phỏng vấn')
+  }, [personalTasks, toast, updateApplication])
   const moveToMonthDay = (event: CalendarEvent, day: Date) => {
     const source = new Date(event.startsAt)
     const target = new Date(day)
@@ -666,13 +735,13 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
             <span className="calendar-day-events">
               {dayEvents.slice(0, 4).map(event => <span
                 key={`${event.kind}-${event.id}`}
-                className={`calendar-event ${event.kind} ${event.task?.completedAt ? 'completed' : ''} ${draggingEvent?.id === event.id && draggingEvent.kind === event.kind ? 'dragging' : ''}`}
+                className={`calendar-event ${event.kind} ${event.completedAt ? 'completed' : ''} ${draggingEvent?.id === event.id && draggingEvent.kind === event.kind ? 'dragging' : ''}`}
                 onClick={click => { click.stopPropagation(); setEventContext({ event, x: click.clientX, y: click.clientY }) }}
                 draggable
                 onDragStart={drag => { drag.stopPropagation(); drag.dataTransfer.effectAllowed = 'move'; drag.dataTransfer.setData('text/plain', `${event.kind}:${event.id}`); setDraggingEvent(event) }}
                 onDragEnd={() => { setDraggingEvent(null); setDropTarget('') }}
               >
-                {event.kind === 'task' && <span className={`calendar-check ${event.task?.completedAt ? 'checked' : ''}`} onClick={click => { click.stopPropagation(); toggleTask(event) }}>{event.task?.completedAt && <Check size={11} />}</span>}
+                {event.kind !== 'interview' && <span className={`calendar-check ${event.completedAt ? 'checked' : ''}`} onClick={click => { click.stopPropagation(); toggleTask(event) }}>{event.completedAt && <Check size={11} />}</span>}
                 <time>{new Date(event.startsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time>
                 <strong>{event.title}</strong>
               </span>)}
@@ -720,14 +789,14 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
                   const top = Math.max(0, ((start.getHours() + start.getMinutes() / 60) - weekStartHour) * weekHourHeight)
                   const height = Math.max(38, Math.min(120, (end.getTime() - start.getTime()) / 3600000 * weekHourHeight))
                   if (start.getHours() < weekStartHour || start.getHours() >= weekEndHour) return null
-                  return <button key={`${event.kind}-${event.id}`} className={`week-event ${event.kind} ${event.task?.completedAt ? 'completed' : ''}`} style={{ top, height }} onPointerDown={pointer => { if (pointer.pointerType === 'mouse' && pointer.button !== 0) return; pointer.stopPropagation(); const rect = pointer.currentTarget.getBoundingClientRect(); didWeekDragRef.current = false; weekDragRef.current = { event, grabOffset: pointer.clientY - rect.top, originX: pointer.clientX, originY: pointer.clientY, started: false } }} onClick={click => { click.stopPropagation(); if (!didWeekDragRef.current) setEventContext({ event, x: click.clientX, y: click.clientY }) }}>
-                    <strong>{event.title}</strong><time>{start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{event.application.companyName}</small>
+                  return <button key={`${event.kind}-${event.id}`} className={`week-event ${event.kind} ${event.completedAt ? 'completed' : ''}`} style={{ top, height }} onPointerDown={pointer => { if (pointer.pointerType === 'mouse' && pointer.button !== 0) return; pointer.stopPropagation(); const rect = pointer.currentTarget.getBoundingClientRect(); didWeekDragRef.current = false; weekDragRef.current = { event, grabOffset: pointer.clientY - rect.top, originX: pointer.clientX, originY: pointer.clientY, started: false } }} onClick={click => { click.stopPropagation(); if (!didWeekDragRef.current) setEventContext({ event, x: click.clientX, y: click.clientY }) }}>
+                    <strong>{event.title}</strong><time>{start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{event.application?.companyName ?? 'Việc cá nhân'}</small>
                   </button>
                 })}
                 {previewOnDay && (() => {
                   const top = ((previewOnDay.start.getHours() + previewOnDay.start.getMinutes() / 60) - weekStartHour) * weekHourHeight
                   const height = Math.max(38, Math.min(120, (previewOnDay.end.getTime() - previewOnDay.start.getTime()) / 3600000 * weekHourHeight))
-                  return <span className={`week-event ${previewOnDay.event.kind} move-preview`} style={{ top, height }}><strong>{previewOnDay.event.title}</strong><time>{previewOnDay.start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{previewOnDay.event.application.companyName}</small></span>
+                  return <span className={`week-event ${previewOnDay.event.kind} move-preview`} style={{ top, height }}><strong>{previewOnDay.event.title}</strong><time>{previewOnDay.start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{previewOnDay.event.application?.companyName ?? 'Việc cá nhân'}</small></span>
                 })()}
                 {createPreviewOnDay && (() => {
                   const top = ((createPreviewOnDay.start.getHours() + createPreviewOnDay.start.getMinutes() / 60) - weekStartHour) * weekHourHeight
@@ -745,44 +814,60 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
       <button className="calendar-context-scrim" aria-label="Đóng thông tin sự kiện" onClick={() => setEventContext(null)} onContextMenu={menu => { menu.preventDefault(); setEventContext(null) }} />
       <div className="calendar-context-menu" role="dialog" aria-label="Chi tiết sự kiện" style={{ left: Math.max(12, Math.min(eventContext.x, window.innerWidth - 348)), top: Math.max(12, Math.min(eventContext.y, window.innerHeight - 390)) }} onContextMenu={menu => menu.preventDefault()}>
         <div className="calendar-context-heading">
-          <span className={`calendar-context-icon ${eventContext.event.kind}`}>{eventContext.event.kind === 'task' ? <ListTodo size={18} /> : <Video size={18} />}</span>
-          <div><small>{eventContext.event.kind === 'task' ? 'CÔNG VIỆC' : 'PHỎNG VẤN'}</small><h3>{eventContext.event.title}</h3></div>
+          <span className={`calendar-context-icon ${eventContext.event.kind}`}>{eventContext.event.kind === 'interview' ? <Video size={18} /> : <ListTodo size={18} />}</span>
+          <div><small>{eventContext.event.kind === 'interview' ? 'PHỎNG VẤN' : eventContext.event.kind === 'personal' ? 'VIỆC CÁ NHÂN' : 'CÔNG VIỆC'}</small><h3>{eventContext.event.title}</h3></div>
           <button className="icon-button" onClick={() => setEventContext(null)} aria-label="Đóng"><X size={18} /></button>
         </div>
         <div className="calendar-context-details">
           <p><Clock3 size={17} /><span><small>Thời gian</small><strong>{formatDateTime(eventContext.event.startsAt)}{eventContext.event.endsAt ? ` – ${new Date(eventContext.event.endsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}</strong></span></p>
-          <p><BriefcaseBusiness size={17} /><span><small>Ứng tuyển</small><strong>{eventContext.event.application.jobTitle}</strong><em>{eventContext.event.application.companyName}</em></span></p>
-          <p><Sparkles size={17} /><span><small>Trạng thái</small><StatusBadge status={eventContext.event.application.status} /></span></p>
-          {eventContext.event.task?.note && <p><NotebookPen size={17} /><span><small>Ghi chú</small><em>{eventContext.event.task.note}</em></span></p>}
+          {eventContext.event.application && <>
+            <p><BriefcaseBusiness size={17} /><span><small>Ứng tuyển</small><strong>{eventContext.event.application.jobTitle}</strong><em>{eventContext.event.application.companyName}</em></span></p>
+            <p><Sparkles size={17} /><span><small>Trạng thái</small><StatusBadge status={eventContext.event.application.status} /></span></p>
+          </>}
+          {eventContext.event.note && <p><NotebookPen size={17} /><span><small>Ghi chú</small><em>{eventContext.event.note}</em></span></p>}
         </div>
-        <button className="primary calendar-context-action" onClick={() => { const applicationId = eventContext.event.application.id; setEventContext(null); navigate(`/applications/${applicationId}`) }}>Mở trang chi tiết <ArrowRight size={17} /></button>
+        {eventContext.event.personal ? <div className="calendar-context-buttons">
+          <button className="secondary" onClick={() => { setEditingTask(eventContext.event.personal!); setEventContext(null) }}><Pencil size={16} /> Sửa</button>
+          <button className="secondary danger-hover" onClick={() => { setDeletingTask(eventContext.event.personal!); setEventContext(null) }}><Trash2 size={16} /> Xóa</button>
+        </div> : eventContext.event.application && <button className="primary calendar-context-action" onClick={() => { const applicationId = eventContext.event.application!.id; setEventContext(null); navigate(`/applications/${applicationId}`) }}>Mở trang chi tiết <ArrowRight size={17} /></button>}
       </div>
     </>}
     {createDate && <CalendarTaskModal applications={activeApplications} initialDate={createDate} initialEndDate={createEndDate ?? new Date(createDate.getTime() + 45 * 60000)} onClose={() => { setCreateDate(null); setCreateEndDate(null) }} onSave={(applicationId, task) => {
-      updateApplication(applicationId, application => ({ ...application, updatedAt: new Date().toISOString(), tasks: [task, ...application.tasks] }))
+      if (applicationId) {
+        updateApplication(applicationId, application => ({ ...application, updatedAt: new Date().toISOString(), tasks: [task, ...application.tasks] }))
+        toast('Đã thêm công việc vào lịch')
+      } else {
+        void personalTasks.save({ id: task.id, title: task.title, note: task.note, startsAt: task.dueAt!, endsAt: task.endsAt!, updatedAt: new Date().toISOString() }, 'Đã thêm công việc vào lịch')
+      }
       setCreateDate(null)
       setCreateEndDate(null)
-      toast('Đã thêm công việc vào lịch')
     }} />}
+    {editingTask && <CalendarTaskModal editing={editingTask} applications={[]} initialDate={new Date(editingTask.startsAt)} initialEndDate={new Date(editingTask.endsAt)} onClose={() => setEditingTask(null)} onSave={(_, task) => {
+      void personalTasks.save({ ...editingTask, title: task.title, note: task.note, startsAt: task.dueAt!, endsAt: task.endsAt!, updatedAt: new Date().toISOString() }, 'Đã cập nhật công việc')
+      setEditingTask(null)
+    }} />}
+    {deletingTask && <Modal title="Xóa công việc?" description={`Công việc “${deletingTask.title}” sẽ bị xóa khỏi lịch.`} onClose={() => setDeletingTask(null)} footer={<><button className="secondary" onClick={() => setDeletingTask(null)}>Giữ lại</button><button className="danger-button" onClick={() => { void personalTasks.remove(deletingTask.id); setDeletingTask(null) }}><Trash2 size={17} /> Xóa công việc</button></>}><div className="confirm-warning"><AlertCircle size={22} /><p>Thao tác này không thể hoàn tác.</p></div></Modal>}
   </div>
 }
 
-function CalendarTaskModal({ applications, initialDate, initialEndDate, onClose, onSave }: {
+function CalendarTaskModal({ applications, initialDate, initialEndDate, editing, onClose, onSave }: {
   applications: Application[]
   initialDate: Date
   initialEndDate: Date
+  editing?: PersonalTask
   onClose: () => void
+  // applicationId is empty for a task that is not tied to an application.
   onSave: (applicationId: string, task: JobTask) => void
 }) {
-  const [applicationId, setApplicationId] = useState(applications[0]?.id || '')
-  const [title, setTitle] = useState('')
+  const [applicationId, setApplicationId] = useState('')
+  const [title, setTitle] = useState(editing?.title ?? '')
   const [dueAt, setDueAt] = useState(toInputDateTime(initialDate.toISOString()))
   const [endsAt, setEndsAt] = useState(toInputDateTime(initialEndDate.toISOString()))
-  const [note, setNote] = useState('')
-  const invalid = !applicationId || !title.trim() || !dueAt || !endsAt || new Date(endsAt) <= new Date(dueAt)
-  return <Modal title="Thêm công việc" description="Công việc sẽ được gắn với một đơn ứng tuyển." onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave(applicationId, { id: uid(), title: title.trim(), dueAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString(), note: note.trim() || undefined })}>Lưu công việc</button></>}>
+  const [note, setNote] = useState(editing?.note ?? '')
+  const invalid = !title.trim() || !dueAt || !endsAt || new Date(endsAt) <= new Date(dueAt)
+  return <Modal title={editing ? 'Sửa công việc' : 'Thêm công việc'} description={editing ? undefined : 'Có thể gắn với một đơn ứng tuyển hoặc để là việc cá nhân.'} onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave(applicationId, { id: uid(), title: title.trim(), dueAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString(), note: note.trim() || undefined })}>Lưu công việc</button></>}>
     <div className="form-grid">
-      <Field label="Đơn ứng tuyển" required><select value={applicationId} onChange={event => setApplicationId(event.target.value)}>{applications.map(application => <option key={application.id} value={application.id}>{application.jobTitle} — {application.companyName}</option>)}</select></Field>
+      {!editing && <Field label="Đơn ứng tuyển"><select value={applicationId} onChange={event => setApplicationId(event.target.value)}><option value="">Không gắn đơn ứng tuyển (việc cá nhân)</option>{applications.map(application => <option key={application.id} value={application.id}>{application.jobTitle} — {application.companyName}</option>)}</select></Field>}
       <Field label="Tên công việc" required><input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Gửi portfolio cập nhật" /></Field>
       <div className="form-grid two"><Field label="Bắt đầu" required><input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></Field><Field label="Kết thúc" required error={dueAt && endsAt && new Date(endsAt) <= new Date(dueAt) ? 'Giờ kết thúc phải sau giờ bắt đầu' : undefined}><input type="datetime-local" value={endsAt} onChange={event => setEndsAt(event.target.value)} /></Field></div>
       <Field label="Ghi chú"><textarea rows={3} value={note} onChange={event => setNote(event.target.value)} placeholder="Thông tin cần chuẩn bị..." /></Field>

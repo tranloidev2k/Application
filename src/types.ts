@@ -39,6 +39,16 @@ export interface JobTask {
   completedAt?: string
 }
 
+export interface PersonalTask {
+  id: string
+  title: string
+  note?: string
+  startsAt: string
+  endsAt: string
+  completedAt?: string
+  updatedAt: string
+}
+
 export interface Application {
   id: string
   companyName: string
