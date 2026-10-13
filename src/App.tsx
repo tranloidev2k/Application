@@ -832,42 +832,33 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
         </div> : eventContext.event.application && <button className="primary calendar-context-action" onClick={() => { const applicationId = eventContext.event.application!.id; setEventContext(null); navigate(`/applications/${applicationId}`) }}>Mở trang chi tiết <ArrowRight size={17} /></button>}
       </div>
     </>}
-    {createDate && <CalendarTaskModal applications={activeApplications} initialDate={createDate} initialEndDate={createEndDate ?? new Date(createDate.getTime() + 45 * 60000)} onClose={() => { setCreateDate(null); setCreateEndDate(null) }} onSave={(applicationId, task) => {
-      if (applicationId) {
-        updateApplication(applicationId, application => ({ ...application, updatedAt: new Date().toISOString(), tasks: [task, ...application.tasks] }))
-        toast('Đã thêm công việc vào lịch')
-      } else {
-        void personalTasks.save({ id: task.id, title: task.title, note: task.note, startsAt: task.dueAt!, endsAt: task.endsAt!, updatedAt: new Date().toISOString() }, 'Đã thêm công việc vào lịch')
-      }
+    {createDate && <CalendarTaskModal initialDate={createDate} initialEndDate={createEndDate ?? new Date(createDate.getTime() + 45 * 60000)} onClose={() => { setCreateDate(null); setCreateEndDate(null) }} onSave={values => {
+      void personalTasks.save({ id: uid(), ...values, updatedAt: new Date().toISOString() }, 'Đã thêm công việc vào lịch')
       setCreateDate(null)
       setCreateEndDate(null)
     }} />}
-    {editingTask && <CalendarTaskModal editing={editingTask} applications={[]} initialDate={new Date(editingTask.startsAt)} initialEndDate={new Date(editingTask.endsAt)} onClose={() => setEditingTask(null)} onSave={(_, task) => {
-      void personalTasks.save({ ...editingTask, title: task.title, note: task.note, startsAt: task.dueAt!, endsAt: task.endsAt!, updatedAt: new Date().toISOString() }, 'Đã cập nhật công việc')
+    {editingTask && <CalendarTaskModal editing={editingTask} initialDate={new Date(editingTask.startsAt)} initialEndDate={new Date(editingTask.endsAt)} onClose={() => setEditingTask(null)} onSave={values => {
+      void personalTasks.save({ ...editingTask, ...values, updatedAt: new Date().toISOString() }, 'Đã cập nhật công việc')
       setEditingTask(null)
     }} />}
     {deletingTask && <Modal title="Xóa công việc?" description={`Công việc “${deletingTask.title}” sẽ bị xóa khỏi lịch.`} onClose={() => setDeletingTask(null)} footer={<><button className="secondary" onClick={() => setDeletingTask(null)}>Giữ lại</button><button className="danger-button" onClick={() => { void personalTasks.remove(deletingTask.id); setDeletingTask(null) }}><Trash2 size={17} /> Xóa công việc</button></>}><div className="confirm-warning"><AlertCircle size={22} /><p>Thao tác này không thể hoàn tác.</p></div></Modal>}
   </div>
 }
 
-function CalendarTaskModal({ applications, initialDate, initialEndDate, editing, onClose, onSave }: {
-  applications: Application[]
+function CalendarTaskModal({ initialDate, initialEndDate, editing, onClose, onSave }: {
   initialDate: Date
   initialEndDate: Date
   editing?: PersonalTask
   onClose: () => void
-  // applicationId is empty for a task that is not tied to an application.
-  onSave: (applicationId: string, task: JobTask) => void
+  onSave: (values: Pick<PersonalTask, 'title' | 'note' | 'startsAt' | 'endsAt'>) => void
 }) {
-  const [applicationId, setApplicationId] = useState('')
   const [title, setTitle] = useState(editing?.title ?? '')
   const [dueAt, setDueAt] = useState(toInputDateTime(initialDate.toISOString()))
   const [endsAt, setEndsAt] = useState(toInputDateTime(initialEndDate.toISOString()))
   const [note, setNote] = useState(editing?.note ?? '')
   const invalid = !title.trim() || !dueAt || !endsAt || new Date(endsAt) <= new Date(dueAt)
-  return <Modal title={editing ? 'Sửa công việc' : 'Thêm công việc'} description={editing ? undefined : 'Có thể gắn với một đơn ứng tuyển hoặc để là việc cá nhân.'} onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave(applicationId, { id: uid(), title: title.trim(), dueAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString(), note: note.trim() || undefined })}>Lưu công việc</button></>}>
+  return <Modal title={editing ? 'Sửa công việc' : 'Thêm công việc'} onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave({ title: title.trim(), note: note.trim() || undefined, startsAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString() })}>Lưu công việc</button></>}>
     <div className="form-grid">
-      {!editing && <Field label="Đơn ứng tuyển"><select value={applicationId} onChange={event => setApplicationId(event.target.value)}><option value="">Không gắn đơn ứng tuyển (việc cá nhân)</option>{applications.map(application => <option key={application.id} value={application.id}>{application.jobTitle} — {application.companyName}</option>)}</select></Field>}
       <Field label="Tên công việc" required><input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Gửi portfolio cập nhật" /></Field>
       <div className="form-grid two"><Field label="Bắt đầu" required><input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></Field><Field label="Kết thúc" required error={dueAt && endsAt && new Date(endsAt) <= new Date(dueAt) ? 'Giờ kết thúc phải sau giờ bắt đầu' : undefined}><input type="datetime-local" value={endsAt} onChange={event => setEndsAt(event.target.value)} /></Field></div>
       <Field label="Ghi chú"><textarea rows={3} value={note} onChange={event => setNote(event.target.value)} placeholder="Thông tin cần chuẩn bị..." /></Field>
