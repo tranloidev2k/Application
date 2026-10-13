@@ -88,7 +88,7 @@ export function InterviewModal({ application, onClose, onSave }: { application: 
         </select>
       </Field>
       <Field label={placeField.label}>
-        <div className="input-icon"><placeField.icon size={17} aria-hidden="true" /><input type={placeField.type} inputMode={format === 'phone' ? 'tel' : undefined} value={place} onChange={event => setPlace(event.target.value)} placeholder={placeField.placeholder} /></div>
+        {control => <div className="input-icon"><placeField.icon size={17} aria-hidden="true" /><input {...control} type={placeField.type} inputMode={format === 'phone' ? 'tel' : undefined} value={place} onChange={event => setPlace(event.target.value)} placeholder={placeField.placeholder} /></div>}
       </Field>
       <Field label="Người phỏng vấn" wide><input maxLength={120} value={interviewer} onChange={event => setInterviewer(event.target.value)} placeholder="Tên và chức danh (nếu có)" /></Field>
       {canMove && <label className="check-field wide">
