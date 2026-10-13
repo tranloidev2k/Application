@@ -63,4 +63,15 @@ describe("Time Blocking Calendar", () => {
     cy.get('[role="alertdialog"]').contains("button", "Delete").click();
     cy.contains("Cypress delete event").should("not.exist");
   });
+
+  it("saves a non-application category and keeps it after reload", () => {
+    cy.contains("+ Add event").click();
+    cy.get("input").first().type("Cypress study session");
+    cy.get("select").select("Study");
+    cy.contains("button", "Save").click();
+
+    cy.reload();
+    cy.contains("Cypress study session").should("exist").click({ force: true });
+    cy.get('[role="dialog"]').should("contain.text", "Study");
+  });
 });

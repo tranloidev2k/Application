@@ -1,4 +1,5 @@
 import type { MouseEvent, PointerEvent } from "react";
+import { DEFAULT_CATEGORY } from "../../types/event";
 import type { CalendarEvent } from "../../types/event";
 import type { CreateSelection } from "../../hooks/useDragToCreate";
 import type { MovePreview } from "../../hooks/useDragToMove";
@@ -64,6 +65,7 @@ export function DayColumn({
               id: "create-preview",
               title: "New event",
               description: "",
+              category: DEFAULT_CATEGORY,
               start,
               end,
             },

@@ -21,6 +21,7 @@ const event = (
   id,
   title: id,
   description: "",
+  category: "work",
   start: new Date(2026, 8, day, start[0], start[1]),
   end: new Date(2026, 8, day, end[0], end[1]),
 });

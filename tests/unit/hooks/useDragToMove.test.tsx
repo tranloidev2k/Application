@@ -8,6 +8,7 @@ const event: CalendarEvent = {
   id: "event-1",
   title: "Focus work",
   description: "",
+  category: "work",
   start: new Date(2026, 8, 8, 9),
   end: new Date(2026, 8, 8, 10, 30),
 };
