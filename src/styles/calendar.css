@@ -26,7 +26,8 @@
 .calendar-legend-item.task, .calendar-event-row.task, .day-events-item.task { --kind-fg: var(--event-task-fg); --kind-bg: var(--event-task-bg); --kind-line: var(--event-task-line); }
 .calendar-legend-item.interview, .calendar-event-row.interview, .day-events-item.interview { --kind-fg: var(--event-interview-fg); --kind-bg: var(--event-interview-bg); --kind-line: var(--event-interview-line); }
 .calendar-legend-item.personal, .calendar-event-row.personal, .day-events-item.personal { --kind-fg: var(--event-personal-fg); --kind-bg: var(--event-personal-bg); --kind-line: var(--event-personal-line); }
-.calendar-legend-item.deadline { --kind-fg: var(--event-deadline-fg); --kind-bg: var(--event-deadline-bg); --kind-line: var(--event-deadline-line); }
+.calendar-legend-item.deadline, .calendar-deadline, .day-events-item.deadline { --kind-fg: var(--event-deadline-fg); --kind-bg: var(--event-deadline-bg); --kind-line: var(--event-deadline-line); }
+.calendar-deadline.overdue, .day-events-item.deadline.overdue { --kind-fg: var(--event-overdue-fg); --kind-bg: var(--event-overdue-bg); --kind-line: var(--event-overdue-line); }
 
 .calendar-legend { flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 12px; list-style: none; }
 .calendar-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: var(--fs-xs); font-weight: 500; line-height: 18px; white-space: nowrap; }
@@ -93,7 +94,20 @@
 .calendar-event-face:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .calendar-event-face:active { cursor: grabbing; }
 .calendar-event-face time { flex: none; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.calendar-event-face .calendar-event-icon { flex: none; margin-right: -1px; }
 .calendar-event-face strong { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+/* A deadline: read-only (no check button, not draggable), amber, red once passed. Same height as an event chip. */
+.calendar-deadline {
+  min-width: 0; height: 24px; flex: none; padding: 0 7px;
+  display: flex; align-items: center; gap: 5px;
+  border: 0; border-radius: 5px; box-shadow: inset 2px 0 0 var(--kind-line);
+  background: var(--kind-bg); color: var(--kind-fg);
+  font-size: 12px; font-weight: 600; line-height: 16px; text-align: left; cursor: pointer;
+}
+.calendar-deadline:hover { background: color-mix(in srgb, var(--kind-line) 18%, var(--kind-bg)); }
+.calendar-deadline:focus-visible { outline-offset: -2px; }
+.calendar-deadline > svg { flex: none; }
+.calendar-deadline > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-more {
   flex: none; height: 24px; padding: 0 7px; align-self: flex-start;
   border: 0; border-radius: 5px; background: transparent; color: var(--text-muted);
@@ -110,6 +124,8 @@
 .day-events-item time { flex: none; color: var(--text-muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .day-events-title { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .day-events-item.completed .day-events-title { color: var(--text-subtle); text-decoration: line-through; }
+.day-events-item.deadline .day-events-flag { flex: none; color: var(--kind-line); }
+.day-events-item.deadline .day-events-title { color: var(--kind-fg); font-weight: 600; }
 
 /* -- Week grid: 00:00–24:00 at 64px per hour, scrolled to the useful hours on open. -- */
 .week-calendar { min-width: 800px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -126,6 +142,14 @@
 .week-header > button.today small { color: var(--ink); }
 .week-header > button.today strong { background: var(--ink); color: var(--on-ink); }
 .week-timezone { align-self: end; padding: 0 8px 10px; color: var(--text-subtle); font-size: 12px; font-weight: 400; text-align: right; }
+/* All-day row (deadlines): the header's 72px + day-column grid, with the same scrollbar gutter so the columns line up. */
+.week-allday {
+  flex: none; display: grid; max-height: 104px; overflow: hidden auto; scrollbar-gutter: stable;
+  border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.week-allday-label { padding: 8px 8px 0; color: var(--text-subtle); font-size: 12px; text-align: right; white-space: nowrap; }
+.week-allday-cell { min-width: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); }
+.week-allday-cell.today { background: var(--surface-subtle); }
 .week-scroll {
   flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
   display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: start;
@@ -142,9 +166,10 @@
 .week-column.today { background: var(--surface-subtle); }
 .week-column.drop-target { background: rgba(39, 39, 42, .06); box-shadow: inset 0 0 0 2px rgba(39, 39, 42, .5); }
 .week-hour-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); pointer-events: none; }
-/* Heights come from the event's duration (min 38px), clipped at the bottom of the day. */
+/* Top, height (the exact duration, min 20px, clipped at the end of the day), left and width (the event's lane among
+   overlapping events) are set inline. */
 .week-event {
-  position: absolute; z-index: 2; left: 4px; right: 4px; overflow: hidden; padding: 6px 7px;
+  position: absolute; z-index: 2; overflow: hidden; padding: 4px 6px;
   border: 0; border-left: 3px solid var(--event-task-line); border-radius: 5px;
   background: var(--event-task-bg); color: var(--event-task-fg); text-align: left;
   touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
@@ -154,13 +179,16 @@
 .week-event.personal { border-left-color: var(--event-personal-line); background: var(--event-personal-bg); color: var(--event-personal-fg); }
 .week-event.completed { border-left-color: var(--border-input); background: var(--bg); color: var(--text-subtle); }
 .week-event.completed strong { text-decoration: line-through; }
-.week-event strong, .week-event time, .week-event small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.week-event strong { font-size: 12px; font-weight: 500; line-height: 1.3; }
-.week-event time, .week-event small { margin-top: 2px; font-size: 12px; opacity: .8; }
-/* Shorter than 38px only when clipped at midnight: one line, title then time. */
-.week-event.short { padding: 0 6px; display: flex; align-items: center; gap: 6px; }
-.week-event.short time { flex: none; margin-top: 0; }
-.week-event.short small { display: none; }
+.week-event strong, .week-event time, .week-event small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 16px; }
+.week-event strong { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+.week-event strong > svg { flex: none; }
+.week-event strong > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.week-event time, .week-event small { font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+/* Under 40 minutes: one line, 'Tiêu đề · 16:00'. */
+.week-event.compact { padding: 2px 6px; display: flex; align-items: flex-start; gap: 4px; }
+.week-event.compact strong { flex: 0 1 auto; min-width: 0; }
+.week-event.compact time { flex: none; }
+.week-event.compact small { display: none; }
 .week-event.dragging { opacity: .35; filter: saturate(.65); }
 .week-event.move-preview { z-index: 6; pointer-events: none; opacity: .72; border-style: dashed; box-shadow: var(--shadow-md); }
 .week-event.create-preview { z-index: 6; pointer-events: none; border: 1px dashed var(--accent); background: rgba(238, 242, 255, .9); color: var(--accent); box-shadow: var(--shadow-md); }
@@ -179,7 +207,10 @@
 .calendar-context-icon { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 9px; color: var(--event-task-fg); background: var(--event-task-bg); }
 .calendar-context-icon.interview { color: var(--event-interview-fg); background: var(--event-interview-bg); }
 .calendar-context-icon.personal { color: var(--event-personal-fg); background: var(--event-personal-bg); }
-.calendar-context-details { display: grid; gap: 14px; padding: 16px 2px; }
+.calendar-context-icon.deadline { color: var(--event-deadline-fg); background: var(--event-deadline-bg); }
+.calendar-context-icon.deadline.overdue { color: var(--event-overdue-fg); background: var(--event-overdue-bg); }
+.calendar-context-heading h3.completed { color: var(--text-muted); text-decoration: line-through; }
+.calendar-context-details { display: grid; gap: 12px; padding: 14px 2px; }
 .calendar-context-details p { margin: 0; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; color: var(--text-subtle); }
 .calendar-context-details p > svg { margin-top: 2px; }
 .calendar-context-details p span { min-width: 0; }
@@ -188,10 +219,16 @@
 .calendar-context-details strong { color: var(--text); font-size: 13px; font-weight: 500; line-height: 1.4; }
 .calendar-context-details em { margin-top: 2px; color: var(--text-muted); font-size: 12px; font-style: normal; line-height: 1.4; }
 .calendar-context-details .status-badge { width: fit-content; min-height: 27px; font-size: 12px; }
-.calendar-context-buttons { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
-.calendar-context-buttons.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.calendar-context-buttons button { min-height: 40px; padding: 0 10px; gap: 6px; }
-.calendar-context-action { width: 100%; box-shadow: none; }
+.calendar-context-details .calendar-context-place { overflow-wrap: anywhere; }
+.calendar-context-details .calendar-context-duration { display: inline; color: var(--text-muted); font-weight: 400; }
+.calendar-context-details .calendar-context-overdue { color: var(--event-overdue-fg); font-weight: 600; }
+/* Actions: the main one (join, copy, complete or reopen) on its own row, then 'Đổi giờ' and the rest. */
+.calendar-context-buttons { display: grid; gap: 8px; }
+.calendar-context-main { display: grid; }
+.calendar-context-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.calendar-context-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.calendar-context-row:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.calendar-context-buttons :is(button, a) { min-height: 40px; padding: 0 10px; gap: 6px; box-shadow: none; }
 .reschedule-hint { margin: 0; }
 
 /* -- Desktop: fixed-height page, the month weeks scroll under the sticky weekday row instead of being clipped. -- */

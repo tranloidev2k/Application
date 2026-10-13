@@ -1,11 +1,12 @@
-import { Check } from 'lucide-react'
+import { Check, Video } from 'lucide-react'
 import { formatTime } from '../../utils/date'
-import { anchorOf, CalendarEvent, eventAriaLabel, PopoverAnchor } from './calendarUtils'
+import { anchorOf, CalendarEvent, eventAriaLabel, eventTimeRange, PopoverAnchor } from './calendarUtils'
 
 /**
  * One event in a month cell: a separate check button for tasks, then the chip face. The face is a draggable
  * `div role="button"` (Firefox will not start an HTML5 drag from a native <button>); a click, Enter or Space opens the
- * event popover. Clicks never reach the cell, so they never open 'Thêm việc'.
+ * event popover. Clicks never reach the cell, so they never open 'Thêm việc'. Interviews show a video icon in place of
+ * the check button.
  */
 export function CalendarEventChip({ event, dragging, onOpen, onToggle, onDragStart, onDragEnd }: {
   event: CalendarEvent
@@ -32,7 +33,7 @@ export function CalendarEventChip({ event, dragging, onOpen, onToggle, onDragSta
       role="button"
       tabIndex={0}
       aria-label={eventAriaLabel(event)}
-      title={`${time} ${event.title}`}
+      title={`${eventTimeRange(event)} ${event.title}`}
       draggable
       onClick={click => { click.stopPropagation(); onOpen(event, anchorOf(click), click.currentTarget) }}
       onKeyDown={key => {
@@ -49,6 +50,7 @@ export function CalendarEventChip({ event, dragging, onOpen, onToggle, onDragSta
       }}
       onDragEnd={onDragEnd}
     >
+      {event.kind === 'interview' && <Video className="calendar-event-icon" size={12} strokeWidth={2.25} aria-hidden="true" />}
       <time>{time}</time>
       <strong>{event.title}</strong>
     </div>

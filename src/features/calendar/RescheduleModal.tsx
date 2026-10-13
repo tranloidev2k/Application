@@ -4,15 +4,9 @@ import { useState } from 'react'
 import { calendarDateKey, formatTime } from '../../utils/date'
 import { Field } from '../../components/ui/Field'
 import { Modal } from '../../components/ui/Modal'
-import { calendarEventEnd, CalendarEvent, KIND_LABEL } from './calendarUtils'
+import { calendarEventEnd, CalendarEvent, formatDuration, KIND_LABEL } from './calendarUtils'
 
 const pad2 = (value: number) => String(value).padStart(2, '0')
-const durationLabel = (minutes: number) => {
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  if (!hours) return `${rest} phút`
-  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`
-}
 
 /**
  * 'Đổi giờ': a new date and start time for any event, keeping its duration. The non-drag way to reschedule, for
@@ -54,7 +48,7 @@ export function RescheduleModal({ event, onClose, onSave }: {
         <Field label="Giờ bắt đầu" required error={!time ? 'Chọn giờ bắt đầu' : undefined}><input type="time" step={300} value={time} onChange={change => setTime(change.target.value)} /></Field>
       </div>
       <p className="modal-hint reschedule-hint">
-        Giữ nguyên thời lượng {durationLabel(durationMinutes)}{newEnd ? `, kết thúc lúc ${formatTime(newEnd)}${calendarDateKey(newEnd) !== date ? ' ngày hôm sau' : ''}` : ''}.
+        Giữ nguyên thời lượng {formatDuration(durationMinutes)}{newEnd ? `, kết thúc lúc ${formatTime(newEnd)}${calendarDateKey(newEnd) !== date ? ' ngày hôm sau' : ''}` : ''}.
       </p>
     </div>
   </Modal>

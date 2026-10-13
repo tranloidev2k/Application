@@ -3,11 +3,13 @@
 import { useMemo } from 'react'
 import { Application, PersonalTask } from '../../types'
 import { calendarDateKey } from '../../utils/date'
-import { CalendarEvent } from './calendarUtils'
+import { calendarEventKey, CalendarEvent } from './calendarUtils'
 
 /**
- * Every calendar item, sorted by start: personal tasks, dated application tasks and interviews that are not cancelled
- * (of applications that are not deleted). `byDay` groups them by local date key, in the same order.
+ * Every timed calendar item, sorted by start: personal tasks, dated application tasks and interviews that are not
+ * cancelled (of applications that are not deleted). `byDay` groups them by local date key, in the same order; `byKey`
+ * finds the current version of an event (e.g. for an open popover after the event was ticked off).
+ * Application deadlines are not events: see useCalendarDeadlines.
  */
 export function useCalendarEvents(applications: Application[], personalTasks: PersonalTask[]) {
   return useMemo(() => {
@@ -40,17 +42,21 @@ export function useCalendarEvents(applications: Application[], personalTasks: Pe
           title: interview.title,
           startsAt: interview.startsAt,
           endsAt: interview.endsAt,
+          note: interview.note,
           application,
+          interview,
         })),
       ]),
     ].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     const byDay = new Map<string, CalendarEvent[]>()
+    const byKey = new Map<string, CalendarEvent>()
     for (const event of events) {
       const key = calendarDateKey(event.startsAt)
       const list = byDay.get(key)
       if (list) list.push(event)
       else byDay.set(key, [event])
+      byKey.set(calendarEventKey(event), event)
     }
-    return { events, byDay }
+    return { events, byDay, byKey }
   }, [applications, personalTasks])
 }

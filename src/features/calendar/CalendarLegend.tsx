@@ -1,10 +1,10 @@
-import { CalendarClock, ListTodo, UserRound, Video } from 'lucide-react'
+import { Flag, ListTodo, UserRound, Video } from 'lucide-react'
 
 const LEGEND = [
   { tone: 'interview', label: 'Phỏng vấn', Icon: Video },
   { tone: 'task', label: 'Việc ứng tuyển', Icon: ListTodo },
   { tone: 'personal', label: 'Việc cá nhân', Icon: UserRound },
-  { tone: 'deadline', label: 'Hạn nộp', Icon: CalendarClock },
+  { tone: 'deadline', label: 'Hạn nộp', Icon: Flag },
 ] as const
 
 /** Static key to the event colours (a tinted swatch with the kind's icon, like the chips), shown in the desktop toolbar. */

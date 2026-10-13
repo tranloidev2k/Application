@@ -1,89 +1,89 @@
 'use client'
 
-import { KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef } from 'react'
-import { ArrowRight, BriefcaseBusiness, CalendarClock, Clock3, ListTodo, NotebookPen, Pencil, Sparkles, Trash2, Video, X } from 'lucide-react'
-import { formatDateTime, formatTime } from '../../utils/date'
+import { ReactNode, useId } from 'react'
+import {
+  ArrowRight, BriefcaseBusiness, CalendarClock, Check, Clock3, Copy, ListTodo, NotebookPen, Pencil, RotateCcw, Sparkles,
+  Trash2, Video, X,
+} from 'lucide-react'
+import { formatTime, formatWeekdayDate } from '../../utils/date'
+import { isHttpUrl } from '../../utils/url'
 import { StatusBadge } from '../../components/ui/StatusBadge'
-import { CalendarEvent, PopoverAnchor } from './calendarUtils'
+import { CalendarPopover } from './CalendarPopover'
+import { calendarEventEnd, CalendarEvent, formatDuration, PopoverAnchor } from './calendarUtils'
+import { InterviewRows } from './InterviewRows'
 
-const POPOVER_WIDTH = 348
-const POPOVER_HEIGHT = 400
-const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 const KIND_HEADING = { interview: 'PHỎNG VẤN', personal: 'VIỆC CÁ NHÂN', task: 'CÔNG VIỆC' } as const
 
 /**
- * Details of one calendar event, opened from a chip or a week block. It takes focus, keeps Tab inside, and closes on
- * Escape or a click outside (the caller returns focus to the opener). 'Đổi giờ' reschedules any kind without dragging.
+ * Details of one calendar event, opened from a chip or a week block. Interviews show their format, interviewer and
+ * place, with 'Tham gia cuộc họp' for a meeting link (otherwise 'Sao chép địa chỉ' or 'Sao chép số điện thoại').
+ * Tasks can be ticked off or reopened in place: `event` is the live version, so the popover follows the change.
+ * 'Đổi giờ' reschedules any kind without dragging. The first action takes focus on open.
  */
-export function EventPopover({ event, anchor, onClose, onReschedule, onEdit, onDelete, onOpenDetail }: {
+export function EventPopover({ event, anchor, onClose, onToggle, onCopy, onReschedule, onEdit, onDelete, onOpenDetail }: {
   event: CalendarEvent
   anchor: PopoverAnchor
   onClose: () => void
+  onToggle: () => void
+  /** Copies an address (or a phone number); `what` names it in the toast. */
+  onCopy: (text: string, what: string) => void
   onReschedule: () => void
   onEdit: () => void
   onDelete: () => void
   onOpenDetail: () => void
 }) {
   const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose }, [onClose])
-  useEffect(() => {
-    dialogRef.current?.focus({ preventScroll: true })
-    const closeOnEscape = (keyboard: KeyboardEvent) => {
-      if (keyboard.key !== 'Escape' || document.querySelector('.modal')) return
-      keyboard.preventDefault()
-      onCloseRef.current()
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [])
+  const start = new Date(event.startsAt)
+  const end = calendarEventEnd(event)
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000)
+  const place = event.interview?.locationOrMeetingUrl?.trim()
+  const completed = !!event.completedAt
 
-  const trapTab = (keyboard: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (keyboard.key !== 'Tab') return
-    const focusable = Array.from(keyboard.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE))
-    if (!focusable.length) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-    if (keyboard.shiftKey ? active === first || active === keyboard.currentTarget : active === last) {
-      keyboard.preventDefault()
-      ;(keyboard.shiftKey ? last : first).focus()
-    }
+  let main: ReactNode = null
+  if (event.kind !== 'interview') {
+    main = <button type="button" className={completed ? 'secondary' : 'primary'} onClick={onToggle}>
+      {completed ? <RotateCcw size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}
+      {completed ? 'Mở lại' : 'Đánh dấu hoàn thành'}
+    </button>
+  } else if (place && isHttpUrl(place)) {
+    main = <a className="primary" href={place} target="_blank" rel="noopener noreferrer">
+      <Video size={16} aria-hidden="true" /> Tham gia cuộc họp<span className="sr-only"> (mở trong tab mới)</span>
+    </a>
+  } else if (place) {
+    const what = event.interview?.format === 'phone' ? 'số điện thoại' : 'địa chỉ'
+    main = <button type="button" className="secondary" onClick={() => onCopy(place, what)}><Copy size={16} aria-hidden="true" /> Sao chép {what}</button>
   }
 
-  return <>
-    <button type="button" tabIndex={-1} className="calendar-context-scrim" aria-label="Đóng thông tin sự kiện" onClick={onClose} onContextMenu={menu => { menu.preventDefault(); onClose() }} />
-    <div
-      ref={dialogRef}
-      className="calendar-context-menu"
-      role="dialog"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      style={{ left: Math.max(12, Math.min(anchor.x, window.innerWidth - POPOVER_WIDTH)), top: Math.max(12, Math.min(anchor.y, window.innerHeight - POPOVER_HEIGHT)) }}
-      onKeyDown={trapTab}
-      onContextMenu={menu => menu.preventDefault()}
-    >
-      <div className="calendar-context-heading">
-        <span className={`calendar-context-icon ${event.kind}`} aria-hidden="true">{event.kind === 'interview' ? <Video size={18} /> : <ListTodo size={18} />}</span>
-        <div><small>{KIND_HEADING[event.kind]}</small><h3 id={titleId}>{event.title}</h3></div>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Đóng"><X size={18} /></button>
+  return <CalendarPopover anchor={anchor} labelledBy={titleId} closeLabel="Đóng thông tin sự kiện" onClose={onClose}>
+    <div className="calendar-context-heading">
+      <span className={`calendar-context-icon ${event.kind}`} aria-hidden="true">{event.kind === 'interview' ? <Video size={18} /> : <ListTodo size={18} />}</span>
+      <div>
+        <small>{KIND_HEADING[event.kind]}{completed ? ' · ĐÃ HOÀN THÀNH' : ''}</small>
+        <h3 id={titleId} className={completed ? 'completed' : ''}>{event.title}</h3>
       </div>
-      <div className="calendar-context-details">
-        <p><Clock3 size={17} aria-hidden="true" /><span><small>Thời gian</small><strong>{formatDateTime(event.startsAt)}{event.endsAt ? ` – ${formatTime(event.endsAt)}` : ''}</strong></span></p>
-        {event.application && <>
-          <p><BriefcaseBusiness size={17} aria-hidden="true" /><span><small>Ứng tuyển</small><strong>{event.application.jobTitle}</strong><em>{event.application.companyName}</em></span></p>
-          <p><Sparkles size={17} aria-hidden="true" /><span><small>Trạng thái</small><StatusBadge status={event.application.status} /></span></p>
-        </>}
-        {event.note && <p><NotebookPen size={17} aria-hidden="true" /><span><small>Ghi chú</small><em>{event.note}</em></span></p>}
-      </div>
-      <div className={`calendar-context-buttons ${event.personal ? 'three' : ''}`}>
+      <button type="button" className="icon-button" onClick={onClose} aria-label="Đóng"><X size={18} /></button>
+    </div>
+    <div className="calendar-context-details">
+      <p><Clock3 size={17} aria-hidden="true" /><span>
+        <small>Thời gian</small>
+        <strong>{formatWeekdayDate(start)} · {formatTime(start)}–{formatTime(end)}{minutes > 0 && <span className="calendar-context-duration"> · {formatDuration(minutes)}</span>}</strong>
+      </span></p>
+      {event.interview && <InterviewRows interview={event.interview} />}
+      {event.application && <>
+        <p><BriefcaseBusiness size={17} aria-hidden="true" /><span><small>Ứng tuyển</small><strong>{event.application.jobTitle}</strong><em>{event.application.companyName}</em></span></p>
+        <p><Sparkles size={17} aria-hidden="true" /><span><small>Trạng thái</small><StatusBadge status={event.application.status} /></span></p>
+      </>}
+      {event.note && <p><NotebookPen size={17} aria-hidden="true" /><span><small>Ghi chú</small><em>{event.note}</em></span></p>}
+    </div>
+    <div className="calendar-context-buttons">
+      {main && <div className="calendar-context-main">{main}</div>}
+      <div className={`calendar-context-row ${event.personal ? 'three' : ''}`}>
         <button type="button" className="secondary" onClick={onReschedule}><CalendarClock size={16} aria-hidden="true" /> Đổi giờ</button>
         {event.personal ? <>
           <button type="button" className="secondary" onClick={onEdit}><Pencil size={16} aria-hidden="true" /> Sửa</button>
           <button type="button" className="secondary danger-hover" onClick={onDelete}><Trash2 size={16} aria-hidden="true" /> Xóa</button>
-        </> : event.application && <button type="button" className="primary calendar-context-action" onClick={onOpenDetail}>Mở trang chi tiết <ArrowRight size={17} aria-hidden="true" /></button>}
+        </> : event.application && <button type="button" className={main ? 'secondary' : 'primary'} onClick={onOpenDetail}>Mở trang chi tiết <ArrowRight size={17} aria-hidden="true" /></button>}
       </div>
     </div>
-  </>
+  </CalendarPopover>
 }

@@ -13,18 +13,25 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { CalendarTaskModal } from './CalendarTaskModal'
 import { CalendarToolbar } from './CalendarToolbar'
 import {
-  CalendarEvent, calendarStateFromParams, CalendarView, monthGridDays, monthTitle, PopoverAnchor, weekDaysOf, weekTitle,
+  anchorBeside, calendarEventKey, CalendarDeadline, CalendarEvent, calendarStateFromParams, CalendarView, monthGridDays,
+  monthTitle, PopoverAnchor, weekDaysOf, weekTitle,
 } from './calendarUtils'
 import { DayEventsPopover } from './DayEventsPopover'
+import { DeadlinePopover } from './DeadlinePopover'
 import { EventPopover } from './EventPopover'
 import { MonthView } from './MonthView'
 import { RescheduleModal } from './RescheduleModal'
+import { useCalendarDeadlines } from './useCalendarDeadlines'
 import { useCalendarEvents } from './useCalendarEvents'
 import { useCalendarMutations } from './useCalendarMutations'
 import { WeekView } from './WeekView'
 
-type EventPopoverState = { event: CalendarEvent; anchor: PopoverAnchor; opener: HTMLElement }
-type DayListState = { day: Date; events: CalendarEvent[]; anchor: DOMRect; opener: HTMLElement }
+/** The open popover: an event (looked up live by key when shown) or a read-only deadline, and the element to refocus. */
+type PopoverState = { anchor: PopoverAnchor; opener: HTMLElement } & (
+  | { type: 'event'; event: CalendarEvent }
+  | { type: 'deadline'; deadline: CalendarDeadline }
+)
+type DayListState = { day: Date; events: CalendarEvent[]; deadlines: CalendarDeadline[]; anchor: DOMRect; opener: HTMLElement }
 
 const focusIfConnected = (element?: HTMLElement | null) => {
   if (element?.isConnected) element.focus({ preventScroll: true })
@@ -47,14 +54,15 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
   const [cursor, setCursor] = useState(() => calendarStateFromParams(searchParams).cursor)
   const [view, setView] = useState<CalendarView>(() => calendarStateFromParams(searchParams).view)
   const [creating, setCreating] = useState<{ start: Date; end: Date } | null>(null)
-  const [popover, setPopover] = useState<EventPopoverState | null>(null)
+  const [popover, setPopover] = useState<PopoverState | null>(null)
   const [dayList, setDayList] = useState<DayListState | null>(null)
   const [rescheduling, setRescheduling] = useState<CalendarEvent | null>(null)
   const [editingTask, setEditingTask] = useState<PersonalTask | null>(null)
   const [deletingTask, setDeletingTask] = useState<PersonalTask | null>(null)
   const now = useMinuteClock()
   const personalTasks = usePersonalTasks(toast)
-  const { byDay } = useCalendarEvents(applications, personalTasks.tasks)
+  const { byDay, byKey } = useCalendarEvents(applications, personalTasks.tasks)
+  const deadlinesByDay = useCalendarDeadlines(applications)
   const { toggleTask, moveEvent } = useCalendarMutations(personalTasks, updateApplication, toast)
 
   const todayKey = calendarDateKey(now)
@@ -99,11 +107,27 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
     setCreating({ start, end: end ?? new Date(start.getTime() + 45 * 60000) })
   }, [])
   const openCreateOnDay = useCallback((day: Date) => openCreate(dayAtNine(day)), [openCreate])
-  const openEvent = useCallback((event: CalendarEvent, anchor: PopoverAnchor, opener: HTMLElement) => setPopover({ event, anchor, opener }), [])
-  const openDayList = useCallback((day: Date, events: CalendarEvent[], opener: HTMLElement) => {
-    setDayList({ day, events, anchor: opener.getBoundingClientRect(), opener })
+  const openEvent = useCallback((event: CalendarEvent, anchor: PopoverAnchor, opener: HTMLElement) => setPopover({ type: 'event', event, anchor, opener }), [])
+  const openDeadline = useCallback((deadline: CalendarDeadline, anchor: PopoverAnchor, opener: HTMLElement) => setPopover({ type: 'deadline', deadline, anchor, opener }), [])
+  const openDayList = useCallback((day: Date, events: CalendarEvent[], deadlines: CalendarDeadline[], opener: HTMLElement) => {
+    setDayList({ day, events, deadlines, anchor: opener.getBoundingClientRect(), opener })
   }, [])
-  const monthHandlers = { onCreate: openCreateOnDay, onOpenEvent: openEvent, onToggle: toggleTask, onMore: openDayList }
+  const monthHandlers = { onCreate: openCreateOnDay, onOpenEvent: openEvent, onOpenDeadline: openDeadline, onToggle: toggleTask, onMore: openDayList }
+  // The open event as it is now (e.g. just ticked off), not as it was when the popover opened.
+  const popoverEvent = popover?.type === 'event' ? byKey.get(calendarEventKey(popover.event)) ?? popover.event : null
+
+  const copyText = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(`Đã sao chép ${what}`)
+    } catch {
+      toast(`Không sao chép được ${what}`, { tone: 'error' })
+    }
+  }
+  const openApplication = (applicationId?: string) => {
+    setPopover(null)
+    if (applicationId) navigate(`/applications/${applicationId}`)
+  }
 
   // Closing the popover hands focus back to the chip (or '+N mục khác') that opened it, before any dialog opens from it,
   // so that dialog in turn returns focus there.
@@ -112,10 +136,9 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
     setPopover(null)
   }
   const fromPopover = (action: (event: CalendarEvent) => void) => () => {
-    if (!popover) return
-    const { event } = popover
+    if (!popoverEvent) return
     closePopover()
-    action(event)
+    action(popoverEvent)
   }
 
   return <div className="page calendar-page">
@@ -130,13 +153,15 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
         onAdd={() => openCreate(new Date())}
       />
       {view === 'month'
-        ? <MonthView cursor={cursor} byDay={byDay} todayKey={todayKey} handlers={monthHandlers} onMove={moveEvent} />
+        ? <MonthView cursor={cursor} byDay={byDay} deadlinesByDay={deadlinesByDay} todayKey={todayKey} handlers={monthHandlers} onMove={moveEvent} />
         : <WeekView
           days={weekDays}
           byDay={byDay}
+          deadlinesByDay={deadlinesByDay}
           now={now}
           ready={ready}
           onOpenEvent={openEvent}
+          onOpenDeadline={openDeadline}
           onCreateDay={openCreateOnDay}
           onCreateRange={openCreate}
           onSlot={start => openCreate(start)}
@@ -146,29 +171,41 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
     {dayList && <DayEventsPopover
       day={dayList.day}
       events={dayList.events}
+      deadlines={dayList.deadlines}
+      overdue={calendarDateKey(dayList.day) < todayKey}
       anchor={dayList.anchor}
       onClose={returnFocus => {
         if (returnFocus) focusIfConnected(dayList.opener)
         setDayList(null)
       }}
       onPick={(event, item) => {
-        const rect = item.getBoundingClientRect()
         setDayList(null)
-        setPopover({ event, anchor: { x: rect.right + 8, y: rect.top }, opener: dayList.opener })
+        setPopover({ type: 'event', event, anchor: anchorBeside(item), opener: dayList.opener })
+      }}
+      onPickDeadline={(deadline, item) => {
+        setDayList(null)
+        setPopover({ type: 'deadline', deadline, anchor: anchorBeside(item), opener: dayList.opener })
       }}
     />}
-    {popover && <EventPopover
-      event={popover.event}
+    {popover && popoverEvent && <EventPopover
+      key={calendarEventKey(popoverEvent)}
+      event={popoverEvent}
       anchor={popover.anchor}
       onClose={closePopover}
+      onToggle={() => toggleTask(popoverEvent)}
+      onCopy={(text, what) => { void copyText(text, what) }}
       onReschedule={fromPopover(setRescheduling)}
       onEdit={fromPopover(event => { if (event.personal) setEditingTask(event.personal) })}
       onDelete={fromPopover(event => { if (event.personal) setDeletingTask(event.personal) })}
-      onOpenDetail={() => {
-        const applicationId = popover.event.application?.id
-        setPopover(null)
-        if (applicationId) navigate(`/applications/${applicationId}`)
-      }}
+      onOpenDetail={() => openApplication(popoverEvent.application?.id)}
+    />}
+    {popover?.type === 'deadline' && <DeadlinePopover
+      key={`deadline-${popover.deadline.id}`}
+      deadline={popover.deadline}
+      now={now}
+      anchor={popover.anchor}
+      onClose={closePopover}
+      onOpenDetail={() => openApplication(popover.deadline.application.id)}
     />}
     {rescheduling && <RescheduleModal event={rescheduling} onClose={() => setRescheduling(null)} onSave={start => {
       moveEvent(rescheduling, start)

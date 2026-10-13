@@ -1,5 +1,5 @@
 import type { KeyboardEvent, MouseEvent } from 'react'
-import { Application, JobTask, PersonalTask } from '../../types'
+import { Application, Interview, JobTask, PersonalTask } from '../../types'
 import { formatTime } from '../../utils/date'
 
 export type CalendarView = 'month' | 'week'
@@ -14,10 +14,20 @@ export type CalendarEvent = {
   note?: string
   application?: Application
   task?: JobTask
+  interview?: Interview
   personal?: PersonalTask
 }
-/** Where a popover opens: a viewport point (the click, or the bottom-left corner of a keyboard-activated element). */
-export type PopoverAnchor = { x: number; y: number }
+/**
+ * A SAVED application's deadline, shown read-only on its local date (never a timed event: it is not dragged, moved or
+ * ticked off).
+ */
+export type CalendarDeadline = { id: string; dayKey: string; application: Application }
+/**
+ * Where a popover opens: its top-left corner at (x, y), or, when it does not fit below, its bottom edge at `above`.
+ * For a click that is the pointer; for a keyboard activation, the element's rect (below it, or above it, or beside
+ * it via `side` when neither fits, so it never covers the element that opened it).
+ */
+export type PopoverAnchor = { x: number; y: number; above: number; side?: { left: number; right: number; top: number } }
 
 /** Week grid geometry: the whole day, 00:00–24:00, at 64px per hour. */
 export const HOUR_HEIGHT = 64
@@ -92,18 +102,44 @@ export const calendarEventEnd = (event: CalendarEvent) => event.endsAt
 export const sameCalendarEvent = (a: CalendarEvent | null | undefined, b: CalendarEvent) => !!a && a.id === b.id && a.kind === b.kind
 export const calendarEventKey = (event: CalendarEvent) => `${event.kind}-${event.id}`
 
-/** Screen-reader name of an event chip: 'Phỏng vấn, 17:00, Vòng kỹ thuật, FPT Software'. */
+/** '45 phút', '1 giờ', '1 giờ 30 phút'. */
+export const formatDuration = (minutes: number) => {
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (!hours) return `${rest} phút`
+  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`
+}
+/** '16:00–16:45'. */
+export const eventTimeRange = (event: CalendarEvent) => `${formatTime(event.startsAt)}–${formatTime(calendarEventEnd(event))}`
+
+/** Screen-reader name of an event chip: 'Phỏng vấn, 17:00 đến 18:00, Vòng kỹ thuật, FPT Software'. */
 export const eventAriaLabel = (event: CalendarEvent) => [
   KIND_LABEL[event.kind],
-  formatTime(event.startsAt),
+  `${formatTime(event.startsAt)} đến ${formatTime(calendarEventEnd(event))}`,
   event.title,
   event.application?.companyName,
   event.completedAt ? 'đã hoàn thành' : '',
 ].filter(Boolean).join(', ')
 
-/** The pointer for a mouse click; the element's bottom-left corner for a keyboard activation (which has no pointer). */
+/** Screen-reader name of a deadline chip: 'Hạn nộp hồ sơ, Grab, Mobile Developer, đã quá hạn'. */
+export const deadlineAriaLabel = (deadline: CalendarDeadline, overdue: boolean) => [
+  'Hạn nộp hồ sơ',
+  deadline.application.companyName,
+  deadline.application.jobTitle,
+  overdue ? 'đã quá hạn' : '',
+].filter(Boolean).join(', ')
+
+/**
+ * The pointer for a mouse click; for a keyboard activation (which has no pointer, so `detail` is 0) the element's
+ * rect, read now in the handler: under its bottom-left corner, or above it when there is no room below.
+ */
 export const anchorOf = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>): PopoverAnchor => {
-  if ('clientX' in event && event.detail > 0) return { x: event.clientX, y: event.clientY }
+  if ('clientX' in event && event.detail > 0) return { x: event.clientX, y: event.clientY, above: event.clientY }
   const rect = event.currentTarget.getBoundingClientRect()
-  return { x: rect.left, y: rect.bottom + 4 }
+  return { x: rect.left, y: rect.bottom + 4, above: rect.top - 4, side: { left: rect.left - 8, right: rect.right + 8, top: rect.top } }
+}
+/** Anchors a popover beside an element (to its right), e.g. an item of the '+N mục khác' menu that is closing. */
+export const anchorBeside = (element: HTMLElement): PopoverAnchor => {
+  const rect = element.getBoundingClientRect()
+  return { x: rect.right + 8, y: rect.top, above: rect.bottom }
 }

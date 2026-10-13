@@ -3,11 +3,13 @@
 import { useEffect, useRef } from 'react'
 import { calendarDateKey, formatTime, formatWeekdayDate } from '../../utils/date'
 import {
-  calendarEventKey, CalendarEvent, DAY_MINUTES, DEFAULT_SCROLL_HOUR, HOUR_HEIGHT, minuteOfDay, PopoverAnchor,
-  sameCalendarEvent, timezoneLabel, WEEK_GRID_HEIGHT, WEEKDAY_SHORT,
+  calendarEventEnd, calendarEventKey, CalendarDeadline, CalendarEvent, DAY_MINUTES, DEFAULT_SCROLL_HOUR, HOUR_HEIGHT,
+  minuteOfDay, PopoverAnchor, sameCalendarEvent, timezoneLabel, WEEK_GRID_HEIGHT, WEEKDAY_SHORT,
 } from './calendarUtils'
-import { useWeekPointer } from './useWeekPointer'
+import { useWeekPointer, WeekMovePreview } from './useWeekPointer'
+import { WeekAllDayRow } from './WeekAllDayRow'
 import { WeekCreateGhost, WeekEventButton, WeekMoveGhost } from './WeekEventBlock'
+import { assignLanes, weekBlockGeometry } from './weekLayout'
 
 const HOUR_LABELS = Array.from({ length: 23 }, (_, index) => index + 1)
 const GRID_LINES = Array.from({ length: 24 }, (_, index) => index)
@@ -16,17 +18,42 @@ const NOW_PILL_CLEARANCE = 14
 const LABEL_CLEARANCE = 10
 
 /**
+ * One day's blocks in lanes. While an event is dragged it leaves its own day, and its ghost joins the target day's
+ * layout (in the dragged event's place in the order when that is the same day), so the ghost starts exactly where the
+ * event was and the drop lands where the ghost was drawn.
+ */
+const dayBlocks = (dayEvents: CalendarEvent[], movePreview: WeekMovePreview | null, previewHere: boolean) => {
+  const ghost = movePreview && previewHere
+    ? { key: 'move-preview', event: movePreview.event, preview: movePreview, ...weekBlockGeometry(movePreview.start, movePreview.end) }
+    : null
+  const items: { key: string; event: CalendarEvent; preview: WeekMovePreview | null; top: number; height: number; compact: boolean }[] = []
+  let ghostPlaced = false
+  for (const event of dayEvents) {
+    if (sameCalendarEvent(movePreview?.event, event)) {
+      if (ghost) { items.push(ghost); ghostPlaced = true }
+      continue
+    }
+    items.push({ key: calendarEventKey(event), event, preview: null, ...weekBlockGeometry(new Date(event.startsAt), calendarEventEnd(event)) })
+  }
+  if (ghost && !ghostPlaced) items.push(ghost)
+  return assignLanes(items)
+}
+
+/**
  * The time grid for `days`, 00:00–24:00. It opens scrolled to an hour before the earlier of the week's first event
  * and the current hour (07:00 when neither applies), once per week and again when the local data is ready.
  * A red line and time pill mark the current time on today's column.
  */
-export function WeekView({ days, byDay, now, ready, onOpenEvent, onCreateDay, onCreateRange, onSlot, onMove }: {
+export function WeekView({ days, byDay, deadlinesByDay, now, ready, onOpenEvent, onOpenDeadline, onCreateDay, onCreateRange, onSlot, onMove }: {
   days: Date[]
   byDay: Map<string, CalendarEvent[]>
+  /** Read-only, in the all-day row (shown when the week has any). */
+  deadlinesByDay: Map<string, CalendarDeadline[]>
   now: Date
   /** The application cache has loaded, so the first event of the week is known. */
   ready: boolean
   onOpenEvent: (event: CalendarEvent, anchor: PopoverAnchor, opener: HTMLElement) => void
+  onOpenDeadline: (deadline: CalendarDeadline, anchor: PopoverAnchor, opener: HTMLElement) => void
   onCreateDay: (day: Date) => void
   onCreateRange: (start: Date, end: Date) => void
   onSlot: (start: Date) => void
@@ -36,7 +63,9 @@ export function WeekView({ days, byDay, now, ready, onOpenEvent, onCreateDay, on
   const columnsRef = useRef<HTMLDivElement>(null)
   const { movePreview, createPreview, startMove, startCreate, wasDrag } = useWeekPointer({ days, columnsRef, onMove, onCreate: onCreateRange })
   const dayKeys = days.map(day => calendarDateKey(day))
-  const todayIndex = dayKeys.indexOf(calendarDateKey(now))
+  const todayKey = calendarDateKey(now)
+  const todayIndex = dayKeys.indexOf(todayKey)
+  const hasDeadlines = dayKeys.some(key => deadlinesByDay.has(key))
   const nowTop = minuteOfDay(now) / 60 * HOUR_HEIGHT
 
   const weekEvents = dayKeys.flatMap(key => byDay.get(key) ?? [])
@@ -76,6 +105,7 @@ export function WeekView({ days, byDay, now, ready, onOpenEvent, onCreateDay, on
         <small>{WEEKDAY_SHORT[day.getDay()]}</small><strong>{day.getDate()}</strong><span className="sr-only">, thêm việc</span>
       </button>)}
     </div>
+    {hasDeadlines && <WeekAllDayRow days={days} deadlinesByDay={deadlinesByDay} todayKey={todayKey} onOpen={onOpenDeadline} />}
     <div ref={scrollRef} className="week-scroll">
       <div className="week-time-axis" style={{ height: WEEK_GRID_HEIGHT }} aria-hidden="true">
         {HOUR_LABELS.map(hour => todayIndex >= 0 && Math.abs(hour * HOUR_HEIGHT - nowTop) < NOW_PILL_CLEARANCE
@@ -86,9 +116,9 @@ export function WeekView({ days, byDay, now, ready, onOpenEvent, onCreateDay, on
       <div ref={columnsRef} className="week-columns" style={{ height: WEEK_GRID_HEIGHT }}>
         {days.map((day, index) => {
           const dayKey = dayKeys[index]
-          const moveHere = movePreview && calendarDateKey(movePreview.start) === dayKey ? movePreview : null
+          const moveHere = !!movePreview && calendarDateKey(movePreview.start) === dayKey
           const createHere = createPreview && calendarDateKey(createPreview.day) === dayKey ? createPreview : null
-          const dayEvents = (byDay.get(dayKey) ?? []).filter(event => !sameCalendarEvent(movePreview?.event, event))
+          const blocks = dayBlocks(byDay.get(dayKey) ?? [], movePreview, moveHere)
           return <div
             key={dayKey}
             data-week-column
@@ -98,8 +128,9 @@ export function WeekView({ days, byDay, now, ready, onOpenEvent, onCreateDay, on
             onClick={click => { if (!wasDrag()) openSlot(day, click.clientY - click.currentTarget.getBoundingClientRect().top) }}
           >
             {GRID_LINES.map(hour => <span key={hour} className="week-hour-line" style={{ top: hour * HOUR_HEIGHT }} />)}
-            {dayEvents.map(event => <WeekEventButton key={calendarEventKey(event)} event={event} onPointerDown={startMove} onOpen={onOpenEvent} wasDrag={wasDrag} />)}
-            {moveHere && <WeekMoveGhost event={moveHere.event} start={moveHere.start} end={moveHere.end} />}
+            {blocks.map(block => block.preview
+              ? <WeekMoveGhost key={block.key} event={block.event} start={block.preview.start} end={block.preview.end} block={block} />
+              : <WeekEventButton key={block.key} event={block.event} block={block} onPointerDown={startMove} onOpen={onOpenEvent} wasDrag={wasDrag} />)}
             {createHere && <WeekCreateGhost start={createHere.start} end={createHere.end} />}
           </div>
         })}

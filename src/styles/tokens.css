@@ -51,6 +51,8 @@
   --event-interview-fg: #6d28d9;  --event-interview-bg: #ede9fe;  --event-interview-line: #7c3aed;
   --event-personal-fg: #1f4a73;   --event-personal-bg: #e3eefa;   --event-personal-line: #3f78b5;
   --event-deadline-fg: #92400e;   --event-deadline-bg: #fef3c7;   --event-deadline-line: #d97706;
+  /* A deadline that has passed: the one place the calendar uses red besides the current-time line */
+  --event-overdue-fg: #b91c1c;    --event-overdue-bg: #fee2e2;    --event-overdue-line: #dc2626;
 
   /* Radius */
   --r-sm: 6px;

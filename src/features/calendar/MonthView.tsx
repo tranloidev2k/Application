@@ -2,17 +2,20 @@
 
 import { useState } from 'react'
 import { calendarDateKey } from '../../utils/date'
-import { CalendarEvent, monthGridDays, monthTitle, WEEKDAY_HEADERS, WEEKDAY_NAMES } from './calendarUtils'
+import { CalendarDeadline, CalendarEvent, monthGridDays, monthTitle, WEEKDAY_HEADERS, WEEKDAY_NAMES } from './calendarUtils'
 import { MonthCellHandlers, MonthDayCell } from './MonthDayCell'
+
+const NO_DEADLINES: CalendarDeadline[] = []
 
 /**
  * Six weeks of the month containing `cursor`. Chips move between days with HTML5 drag and drop (keeping their time
  * of day); the drag state lives here because only the month grid uses it. The weekday header is the grid's first row,
  * sticky while the weeks scroll under it.
  */
-export function MonthView({ cursor, byDay, todayKey, handlers, onMove }: {
+export function MonthView({ cursor, byDay, deadlinesByDay, todayKey, handlers, onMove }: {
   cursor: Date
   byDay: Map<string, CalendarEvent[]>
+  deadlinesByDay: Map<string, CalendarDeadline[]>
   todayKey: string
   handlers: MonthCellHandlers
   onMove: (event: CalendarEvent, target: Date) => void
@@ -46,6 +49,8 @@ export function MonthView({ cursor, byDay, todayKey, handlers, onMove }: {
           day={day}
           dayKey={dayKey}
           events={byDay.get(dayKey) ?? []}
+          deadlines={deadlinesByDay.get(dayKey) ?? NO_DEADLINES}
+          overdue={dayKey < todayKey}
           outside={day.getMonth() !== cursor.getMonth()}
           today={dayKey === todayKey}
           dropTarget={dropKey === dayKey}

@@ -1,8 +1,9 @@
 'use client'
 
 import { KeyboardEvent as ReactKeyboardEvent, useEffect, useRef } from 'react'
+import { Flag } from 'lucide-react'
 import { formatTime, formatWeekdayDate } from '../../utils/date'
-import { calendarEventKey, CalendarEvent, eventAriaLabel } from './calendarUtils'
+import { calendarEventKey, CalendarDeadline, CalendarEvent, deadlineAriaLabel, eventAriaLabel } from './calendarUtils'
 
 const MENU_WIDTH = 280
 const EDGE = 8
@@ -10,15 +11,19 @@ const ITEM_HEIGHT = 40
 const MENU_CHROME = 52 // heading, padding and border
 
 /**
- * '+N mục khác': a menu of every event of one day, anchored to the button that opened it. Arrow keys, Home and End
- * move between items; Enter opens that event's popover; Escape, Tab or a click outside closes it.
+ * '+N mục khác': a menu of every deadline and event of one day, anchored to the button that opened it. Arrow keys,
+ * Home and End move between items; Enter opens that item's popover; Escape, Tab or a click outside closes it.
  */
-export function DayEventsPopover({ day, events, anchor, onPick, onClose }: {
+export function DayEventsPopover({ day, events, deadlines, overdue, anchor, onPick, onPickDeadline, onClose }: {
   day: Date
   events: CalendarEvent[]
+  deadlines: CalendarDeadline[]
+  /** The day is before today, so its deadlines have passed. */
+  overdue: boolean
   /** The rect of the '+N mục khác' button, read when it was clicked. */
   anchor: DOMRect
   onPick: (event: CalendarEvent, item: HTMLElement) => void
+  onPickDeadline: (deadline: CalendarDeadline, item: HTMLElement) => void
   /** `returnFocus` is false when the menu closes because focus or a click went elsewhere. */
   onClose: (returnFocus: boolean) => void
 }) {
@@ -81,7 +86,8 @@ export function DayEventsPopover({ day, events, anchor, onPick, onClose }: {
     items[next]?.focus()
   }
 
-  const height = events.length * ITEM_HEIGHT + MENU_CHROME
+  const count = deadlines.length + events.length
+  const height = count * ITEM_HEIGHT + MENU_CHROME
   const left = Math.max(EDGE, Math.min(anchor.left, window.innerWidth - MENU_WIDTH - EDGE))
   const below = window.innerHeight - anchor.bottom - EDGE
   const position = below >= height || below >= anchor.top
@@ -90,7 +96,19 @@ export function DayEventsPopover({ day, events, anchor, onPick, onClose }: {
   const label = formatWeekdayDate(day)
 
   return <div ref={menuRef} className="menu day-events-menu" role="menu" aria-label={`Mọi mục ngày ${label}`} style={{ left, ...position }} onKeyDown={onKeyDown}>
-    <p className="day-events-heading" aria-hidden="true">{label} · {events.length} mục</p>
+    <p className="day-events-heading" aria-hidden="true">{label} · {count} mục</p>
+    {deadlines.map(deadline => <button
+      key={`deadline-${deadline.id}`}
+      type="button"
+      role="menuitem"
+      tabIndex={-1}
+      className={`menu-item day-events-item deadline ${overdue ? 'overdue' : ''}`}
+      aria-label={deadlineAriaLabel(deadline, overdue)}
+      onClick={click => onPickDeadline(deadline, click.currentTarget)}
+    >
+      <Flag className="day-events-flag" size={12} strokeWidth={2.25} aria-hidden="true" />
+      <span className="day-events-title">Hạn nộp · {deadline.application.companyName}</span>
+    </button>)}
     {events.map(event => <button
       key={calendarEventKey(event)}
       type="button"
