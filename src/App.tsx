@@ -871,7 +871,7 @@ function Metric({ label, value, onClick }: { label: string; value: number; onCli
 }
 
 const STATUS_CHART_COLORS: Record<Status, string> = {
-  SAVED: '#4f46e5', APPLIED: '#0284c7', SCREENING: '#d97706', INTERVIEW: '#7c3aed', OFFER: '#059669', REJECTED: '#dc2626', WITHDRAWN: '#db2777',
+  SAVED: 'var(--status-saved-fg)', APPLIED: 'var(--status-applied-fg)', SCREENING: 'var(--status-screening-fg)', INTERVIEW: 'var(--status-interview-fg)', OFFER: 'var(--status-offer-fg)', REJECTED: 'var(--status-rejected-fg)', WITHDRAWN: 'var(--status-withdrawn-fg)',
 }
 
 function StatusChart({ applications, navigate }: { applications: Application[]; navigate: (path: string) => void }) {
@@ -883,7 +883,7 @@ function StatusChart({ applications, navigate }: { applications: Application[]; 
     offset += total ? item.count / total * 100 : 0
     return `${STATUS_CHART_COLORS[item.status]} ${start}% ${offset}%`
   })
-  const chartBackground = total ? `conic-gradient(${segments.join(', ')})` : 'conic-gradient(#e7ebe7 0 100%)'
+  const chartBackground = total ? `conic-gradient(${segments.join(', ')})` : 'conic-gradient(var(--line) 0 100%)'
   return <section className="status-chart-card">
     <div className="status-chart-copy"><h2>Tiến độ ứng tuyển</h2></div>
     <div className="status-chart-body">
