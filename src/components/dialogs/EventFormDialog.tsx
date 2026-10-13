@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  CATEGORY_LABELS,
+  EVENT_CATEGORIES,
+  isEventCategory,
+} from "../../types/event";
 import type { CalendarEvent, EventDraft } from "../../types/event";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { inputDateTime } from "../../utils/time";
@@ -17,6 +22,7 @@ export function EventFormDialog({ event, initial, onSave, onClose }: Props) {
   const source: CalendarEvent | EventDraft = event ?? initial;
   const [title, setTitle] = useState(source.title);
   const [description, setDescription] = useState(source.description);
+  const [category, setCategory] = useState(source.category);
   const [start, setStart] = useState(inputDateTime(source.start));
   const [end, setEnd] = useState(inputDateTime(source.end));
   const [error, setError] = useState("");
@@ -36,6 +42,7 @@ export function EventFormDialog({ event, initial, onSave, onClose }: Props) {
     onSave({
       title: title.trim(),
       description,
+      category,
       start: parsedStart,
       end: parsedEnd,
     });
@@ -64,6 +71,23 @@ export function EventFormDialog({ event, initial, onSave, onClose }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               className="mt-1 w-full rounded-md border border-zinc-600 bg-[#17181b] px-3 py-2 outline-none focus:border-[#a8c7fa]"
             />
+          </label>
+          <label className="block text-sm font-medium">
+            Category
+            <select
+              value={category}
+              onChange={(e) => {
+                if (isEventCategory(e.target.value))
+                  setCategory(e.target.value);
+              }}
+              className="mt-1 w-full rounded-md border border-zinc-600 bg-[#17181b] px-3 py-2 outline-none focus:border-[#a8c7fa]"
+            >
+              {EVENT_CATEGORIES.map((value) => (
+                <option key={value} value={value}>
+                  {CATEGORY_LABELS[value]}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm font-medium">
             Description

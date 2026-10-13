@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { DEFAULT_CATEGORY } from "../../types/event";
 import type { CalendarEvent, EventDraft } from "../../types/event";
 import { useCalendarEvents } from "../../hooks/useCalendarEvents";
 import {
@@ -18,7 +19,8 @@ type FormState =
   | { mode: "create"; initial: EventDraft };
 
 export function CalendarApp() {
-  const { events, create, update, move, remove } = useCalendarEvents();
+  const { events, loading, error, create, update, move, remove, dismissError } =
+    useCalendarEvents();
   const days = useMemo(
     () =>
       Array.from({ length: VISIBLE_DAYS }, (_, i) =>
@@ -40,7 +42,13 @@ export function CalendarApp() {
     (start: Date, end: Date) =>
       setForm({
         mode: "create",
-        initial: { title: "", description: "", start, end },
+        initial: {
+          title: "",
+          description: "",
+          category: DEFAULT_CATEGORY,
+          start,
+          end,
+        },
       }),
     [],
   );
@@ -56,8 +64,8 @@ export function CalendarApp() {
   };
 
   const save = (draft: EventDraft) => {
-    if (form?.mode === "edit") update(form.event.id, draft);
-    else create(draft);
+    if (form?.mode === "edit") void update(form.event.id, draft);
+    else void create(draft);
     setForm(null);
   };
 
@@ -70,6 +78,11 @@ export function CalendarApp() {
           <h1 className="text-sm font-semibold tracking-wide text-[#e4e4e4]">
             Time Blocking Calendar
           </h1>
+          {loading && (
+            <span role="status" className="text-xs text-zinc-400">
+              Loading events…
+            </span>
+          )}
           <button
             type="button"
             onClick={openQuickCreate}
@@ -78,11 +91,27 @@ export function CalendarApp() {
             + Add event
           </button>
         </header>
+        {error && (
+          <div
+            role="alert"
+            className="flex shrink-0 items-center justify-between gap-3 border-b border-rose-900/60 bg-rose-950/40 px-4 py-2 text-xs text-rose-300 sm:px-5"
+          >
+            <span>Could not sync with the server: {error}</span>
+            <button
+              type="button"
+              onClick={dismissError}
+              aria-label="Dismiss error"
+              className="rounded px-2 text-base leading-none hover:bg-rose-900/50"
+            >
+              &times;
+            </button>
+          </div>
+        )}
         <CalendarGrid
           days={days}
           events={events}
           onCreate={createFor}
-          onMove={move}
+          onMove={(id, start, end) => void move(id, start, end)}
           onOpen={setDetail}
           onContext={(event, x, y) => setMenu({ event, x, y })}
         />
@@ -124,7 +153,7 @@ export function CalendarApp() {
           event={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
-            remove(deleteTarget.id);
+            void remove(deleteTarget.id);
             setDeleteTarget(null);
           }}
         />

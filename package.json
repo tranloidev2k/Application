@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "server": "tsx watch server/index.ts",
+    "server:start": "tsx server/index.ts",
+    "server:e2e": "tsx server/index.ts --memory",
+    "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
@@ -13,10 +16,11 @@
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
     "typecheck:e2e": "tsc -p tsconfig.cypress.json",
-    "test:e2e": "start-server-and-test dev http://localhost:5173 cypress:run",
-    "format": "prettier --write \"{src,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
-    "format:check": "prettier --check \"{src,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
-    "test:coverage": "vitest run --coverage"
+    "test:e2e": "start-server-and-test server:e2e http://localhost:3001/api/health dev http://localhost:5173 cypress:run",
+    "format": "prettier --write \"{src,server,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
+    "format:check": "prettier --check \"{src,server,tests,cypress}/**/*.{ts,tsx,css}\" \"*.{ts,js,json}\" index.html",
+    "test:coverage": "vitest run --coverage",
+    "typecheck:server": "tsc -p tsconfig.server.json"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -40,9 +44,13 @@
     "prettier": "^3.9.6",
     "start-server-and-test": "^3.0.12",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }

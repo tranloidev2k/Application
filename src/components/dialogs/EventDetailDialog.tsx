@@ -1,3 +1,4 @@
+import { CATEGORY_LABELS } from "../../types/event";
 import type { CalendarEvent } from "../../types/event";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { formatDate, formatTime } from "../../utils/time";
@@ -45,6 +46,10 @@ export function EventDetailDialog({ event, onClose }: Props) {
             &times;
           </button>
         </div>
+
+        <span className="mt-2 inline-block rounded-full bg-zinc-700 px-2.5 py-0.5 text-xs font-semibold text-zinc-200">
+          {CATEGORY_LABELS[event.category]}
+        </span>
 
         <p
           title={event.description || "No description provided."}
