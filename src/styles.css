@@ -33,6 +33,9 @@
   --warning-soft: #fffbeb;
   --success: #047857;
   --success-soft: #ecfdf5;
+  /* Readable accents on the ink surface (toasts) */
+  --accent-on-ink: #c7d2fe;
+  --success-on-ink: #6ee7b7;
 
   /* Application status: neutral for saved/withdrawn, progress hues, rose for rejection */
   --status-saved-fg: #52525b;      --status-saved-bg: #f4f4f5;      --status-saved-border: #d4d4d8;
@@ -315,14 +318,31 @@ strong { font-weight: 500; }
 .modal .status-picker { grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
 .confirm-warning { padding: 13px; display: flex; align-items: flex-start; gap: 11px; border-radius: 9px; background: var(--warning-soft); color: var(--warning); }
 .confirm-warning p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.confirm-warning > svg { flex: none; }
+.modal-hint { margin: 14px 0 0; color: var(--text-muted); font-size: var(--fs-sm); }
 
-/* -- Toast -- */
+/* -- Toast: success/info on ink, error on a white surface with a red edge -- */
 .toast {
   position: fixed; z-index: var(--z-toast); right: 25px; bottom: 25px;
-  padding: 12px 16px; display: flex; align-items: center; gap: 9px;
-  border-radius: var(--r-md); background: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-lg);
-  font-size: var(--fs-xs); font-weight: 500; animation: rise .2s ease;
+  width: max-content; max-width: min(460px, calc(100vw - 50px)); min-height: 48px; padding: 7px 7px 7px 14px;
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid transparent; border-radius: var(--r-md); background: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm); font-weight: 500; line-height: 1.4; animation: rise .2s ease;
 }
+.toast > svg { flex: none; }
+.toast-message { flex: 1; min-width: 0; padding: 4px 0; }
+.toast-action, .toast-close { flex: none; border: 0; border-radius: var(--r-sm); background: transparent; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.toast-action { min-height: 32px; padding: 0 10px; color: var(--accent-on-ink); font-size: var(--fs-sm); font-weight: 600; }
+.toast-close { width: 32px; height: 32px; display: grid; place-items: center; color: rgba(255, 255, 255, .72); }
+.toast-action:hover, .toast-close:hover { background: rgba(255, 255, 255, .12); color: var(--on-ink); }
+.toast :focus-visible { outline-color: var(--accent-on-ink); }
+.toast.success > svg { color: var(--success-on-ink); }
+.toast.error { padding-left: 12px; border-color: var(--line); border-left: 3px solid var(--danger); background: var(--surface); color: var(--text); }
+.toast.error > svg { color: var(--danger); }
+.toast.error .toast-action { color: var(--accent); }
+.toast.error .toast-close { color: var(--text-subtle); }
+.toast.error .toast-action:hover, .toast.error .toast-close:hover { background: var(--bg); color: var(--text); }
+.toast.error :focus-visible { outline-color: var(--focus); }
 
 /* -- Menu / popover -- */
 .menu { position: absolute; z-index: var(--z-popover); min-width: 180px; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-lg); }
@@ -370,6 +390,23 @@ button.chip:hover { border-color: var(--border-input); color: var(--text); }
 
 /* -- Skeleton -- */
 .skeleton { display: block; min-height: 12px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--bg) 25%, var(--line) 37%, var(--bg) 63%); background-size: 400% 100%; color: transparent; animation: shimmer 1.4s ease infinite; }
+/* Detail/edit loading page: mirrors .detail-hero, .info-grid and .tabs so the real page lands without a jump. */
+/* Pieces that sit on the page background need a darker base than var(--bg) to be visible. */
+.detail-skeleton > .skeleton, .detail-skeleton .detail-hero .skeleton { background-image: linear-gradient(90deg, var(--line) 25%, var(--line-strong) 37%, var(--line) 63%); }
+.detail-skeleton .sk-back { width: 150px; height: 14px; margin-bottom: 26px; }
+.detail-skeleton .sk-eyebrow { width: 120px; height: 12px; margin-bottom: 10px; }
+.detail-skeleton .sk-title { width: min(420px, 70vw); height: 30px; margin-bottom: 12px; }
+.detail-skeleton .sk-badge { width: 96px; height: 30px; border-radius: 8px; }
+.detail-skeleton .sk-button { width: 120px; height: 42px; border-radius: 9px; }
+.detail-skeleton .info-item > .sk-icon { width: 31px; height: 31px; border-radius: 8px; }
+.detail-skeleton .info-item > div { flex: 1; }
+.detail-skeleton .sk-label { width: 64px; height: 11px; margin-bottom: 7px; }
+.detail-skeleton .sk-value { width: 70%; height: 15px; }
+.detail-skeleton .sk-tabs { align-items: center; }
+.detail-skeleton .sk-tab { width: 110px; height: 14px; }
+.detail-skeleton .sk-rows { padding: 20px 22px; display: grid; gap: 14px; }
+.detail-skeleton .sk-row { height: 40px; }
+.detail-skeleton .detail-aside .panel { display: grid; gap: 4px; }
 
 /* -- Responsive visibility (after .icon-button so it wins the tie) -- */
 .mobile-only { display: none; }

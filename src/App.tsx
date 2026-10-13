@@ -1,11 +1,11 @@
 'use client'
 
-import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, FocusEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, ArrowLeft, ArrowRight, BriefcaseBusiness, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, ExternalLink,
-  FileText, Filter, LayoutDashboard, Link2, ListTodo, Mail, MapPin, Menu,
+  FileText, Filter, Info, LayoutDashboard, Link2, ListTodo, Mail, MapPin, Menu,
   NotebookPen, PanelLeftClose, PanelLeftOpen, Pencil, Phone, Plus, Search, Settings, Sparkles, Trash2, UserRound, Video, X,
 } from 'lucide-react'
 import { fetchApplications, isDemoApplication, normalizeApplication, saveApplications } from './lib/applications'
@@ -18,12 +18,86 @@ const SIDEBAR_STORAGE_KEY = 'trackly-sidebar-collapsed'
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const dateFormatter = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 const dateTimeFormatter = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const pad2 = (value: number) => String(value).padStart(2, '0')
+/** Local calendar date as yyyy-MM-dd (never the UTC date). */
+const calendarDateKey = (value: Date | string) => {
+  const date = typeof value === 'string' ? new Date(value) : value
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+/** Today's local date as yyyy-MM-dd; use it for date-input max values and future-date checks. */
+const todayKey = () => calendarDateKey(new Date())
+const subscribeNever = () => () => {}
+/** todayKey() for render output: '' during SSR and hydration (the server's time zone may differ), the local date after. */
+const useTodayKey = () => useSyncExternalStore(subscribeNever, todayKey, () => '')
 const formatDate = (value?: string) => value ? dateFormatter.format(new Date(`${value.length === 10 ? `${value}T00:00:00` : value}`)) : '—'
 const formatDateTime = (value?: string) => value ? dateTimeFormatter.format(new Date(value)) : '—'
 const toInputDateTime = (value?: string) => value ? new Date(new Date(value).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''
 
+// Relative date helpers. Callers pass `now` explicitly and only call these on the client after `ready`, never during SSR.
+// formatDueLabel and formatTimeAgo are exported so they stay available to the dashboard and detail work that consumes them.
+const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+const toDate = (value: Date | string) => typeof value === 'string' ? new Date(value) : value
+/** Whole local calendar days from `now` to `value` (negative in the past). */
+const calendarDayDiff = (value: Date | string, now: Date) => {
+  const date = toDate(value)
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((start.getTime() - today.getTime()) / 864e5)
+}
+/** 'HH:mm' in local time. */
+const formatTime = (value: Date | string) => { const date = toDate(value); return `${pad2(date.getHours())}:${pad2(date.getMinutes())}` }
+/** 'Hôm nay' | 'Ngày mai' | 'Hôm qua' | 'T5 15/10' (the year is added when it differs from `now`). */
+const formatRelativeDay = (value: Date | string, now: Date) => {
+  const date = toDate(value)
+  const diff = calendarDayDiff(date, now)
+  if (diff === 0) return 'Hôm nay'
+  if (diff === 1) return 'Ngày mai'
+  if (diff === -1) return 'Hôm qua'
+  const year = date.getFullYear() === now.getFullYear() ? '' : `/${date.getFullYear()}`
+  return `${WEEKDAY_SHORT[date.getDay()]} ${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}${year}`
+}
+/** 'Quá hạn 2 ngày' | 'Quá hạn từ 09:00' | 'Hôm nay 16:00' | 'Ngày mai 09:00' | 'T5 15/10 · 16:00'. */
+export const formatDueLabel = (iso: string, now: Date) => {
+  const due = new Date(iso)
+  const diff = calendarDayDiff(due, now)
+  if (due.getTime() < now.getTime()) return diff < 0 ? `Quá hạn ${-diff} ngày` : `Quá hạn từ ${formatTime(iso)}`
+  if (diff === 0 || diff === 1) return `${formatRelativeDay(due, now)} ${formatTime(iso)}`
+  return `${formatRelativeDay(due, now)} · ${formatTime(iso)}`
+}
+/** 'Vừa xong' | '5 phút trước' | '2 giờ trước' | 'Hôm qua 16:00' | 'dd/MM/yyyy HH:mm'. */
+export const formatTimeAgo = (iso: string, now: Date) => {
+  const date = new Date(iso)
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000)
+  if (minutes < 1) return 'Vừa xong'
+  if (minutes < 60) return `${minutes} phút trước`
+  const diff = calendarDayDiff(date, now)
+  if (diff === 0) return `${Math.floor(minutes / 60)} giờ trước`
+  if (diff === -1) return `Hôm qua ${formatTime(iso)}`
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()} ${formatTime(iso)}`
+}
+
 type Route = { page: 'dashboard' | 'applications' | 'calendar' | 'new' | 'detail' | 'edit' | 'account'; id?: string }
 type SyncState = 'connecting' | 'connected' | 'offline'
+type ToastTone = 'success' | 'error' | 'info'
+type ToastOptions = { tone?: ToastTone; actionLabel?: string; onAction?: () => void }
+type ToastFn = (message: string, options?: ToastOptions) => void
+type ToastState = { id: number; message: string; tone: ToastTone; actionLabel?: string; onAction?: () => void }
+type UpdateApplicationFn = (id: string, updater: (application: Application) => Application) => void
+
+/** Statuses that only make sense once the application has been sent, so they require an applied date. */
+const NEEDS_APPLIED_DATE: Status[] = ['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER']
+
+/** The one status-change rule: new status, optional applied date, and an appended (never rewritten) STATUS_CHANGED activity. */
+function applyStatusChange(app: Application, status: Status, appliedAt?: string): Application {
+  const now = new Date().toISOString()
+  return {
+    ...app,
+    status,
+    appliedAt: appliedAt || app.appliedAt,
+    updatedAt: now,
+    activities: [{ id: uid(), type: 'STATUS_CHANGED', createdAt: now, label: `Chuyển sang ${STATUS_META[status].label}`, detail: `Từ ${STATUS_META[app.status].label}` }, ...app.activities],
+  }
+}
 
 function routeFromPathname(pathname: string): Route {
   const path = pathname.replace(/\/$/, '') || '/'
@@ -42,7 +116,7 @@ function useNavigate() {
   const router = useRouter()
   return useCallback((to: string) => {
     router.push(to)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }, [router])
 }
 
@@ -57,9 +131,11 @@ function loadApps(): Application[] {
 
 type AppDataContextValue = {
   applications: Application[]
+  /** True once the local cache has been read on the client; before that `applications` is empty, not missing. */
+  ready: boolean
   syncState: SyncState
-  toast: (message: string) => void
-  updateApplication: (id: string, updater: (application: Application) => Application) => void
+  toast: ToastFn
+  updateApplication: UpdateApplicationFn
   createApplication: (application: Application) => void
   replaceApplication: (application: Application) => void
 }
@@ -75,11 +151,22 @@ function useAppData() {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [applications, setApplications] = useState<Application[]>([])
   const [storageReady, setStorageReady] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toastState, setToastState] = useState<ToastState | null>(null)
   const [databaseUserId, setDatabaseUserId] = useState('')
   const [syncState, setSyncState] = useState<SyncState>('connecting')
   const [pendingApplications, setPendingApplications] = useState<Record<string, Application>>({})
+  // Mutators read the latest list from this ref, so two updates in one tick and undo closures fired later see current data.
+  const applicationsRef = useRef(applications)
+  const toastIdRef = useRef(0)
 
+  // Must stay referentially stable: usePersonalTasks' load effect depends on it.
+  const toast = useCallback<ToastFn>((message, options = {}) => {
+    toastIdRef.current += 1
+    setToastState({ id: toastIdRef.current, message, tone: options.tone ?? 'success', actionLabel: options.actionLabel, onAction: options.onAction })
+  }, [])
+  const dismissToast = useCallback((id: number) => setToastState(current => current?.id === id ? null : current), [])
+
+  useEffect(() => { applicationsRef.current = applications }, [applications])
   useEffect(() => {
     const localApplications = loadApps()
     queueMicrotask(() => {
@@ -106,13 +193,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('Supabase connection failed', error)
         if (!active) return
         setSyncState('offline')
-        setToast('Chưa kết nối được database — dữ liệu vẫn được lưu trên thiết bị')
+        toast('Chưa kết nối được database — dữ liệu vẫn được lưu trên thiết bị', { tone: 'info' })
       }
     }
 
     void connectDatabase()
     return () => { active = false }
-  }, [])
+  }, [toast])
   useEffect(() => {
     const pending = Object.values(pendingApplications)
     if (!databaseUserId || !pending.length) return
@@ -129,39 +216,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }).catch(error => {
         console.error('Supabase sync failed', error)
         setSyncState('offline')
-        setToast('Không thể đồng bộ database — đã giữ bản sao trên thiết bị')
+        toast('Không thể đồng bộ database — đã giữ bản sao trên thiết bị', { tone: 'error' })
       })
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [pendingApplications, databaseUserId])
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => setToast(''), 2800)
-    return () => window.clearTimeout(timer)
-  }, [toast])
+  }, [pendingApplications, databaseUserId, toast])
 
-  const updateApplication = (id: string, updater: (app: Application) => Application) => {
-    const existing = applications.find(item => item.id === id)
+  const updateApplication = useCallback<UpdateApplicationFn>((id, updater) => {
+    const existing = applicationsRef.current.find(item => item.id === id)
     if (!existing) return
     const next = updater(existing)
+    applicationsRef.current = applicationsRef.current.map(item => item.id === id ? next : item)
     setApplications(items => items.map(item => item.id === id ? next : item))
     setPendingApplications(items => ({ ...items, [next.id]: next }))
-  }
+  }, [])
 
-  const createApplication = (application: Application) => {
+  const createApplication = useCallback((application: Application) => {
+    applicationsRef.current = [application, ...applicationsRef.current]
     setApplications(items => [application, ...items])
     setPendingApplications(items => ({ ...items, [application.id]: application }))
-  }
+  }, [])
 
-  const replaceApplication = (application: Application) => {
+  const replaceApplication = useCallback((application: Application) => {
+    applicationsRef.current = applicationsRef.current.map(item => item.id === application.id ? application : item)
     setApplications(items => items.map(item => item.id === application.id ? application : item))
     setPendingApplications(items => ({ ...items, [application.id]: application }))
+  }, [])
+
+  const value = useMemo<AppDataContextValue>(() => ({
+    applications, ready: storageReady, syncState, toast, updateApplication, createApplication, replaceApplication,
+  }), [applications, storageReady, syncState, toast, updateApplication, createApplication, replaceApplication])
+
+  return <AppDataContext.Provider value={value}>
+    {children}
+    {toastState && <Toast key={toastState.id} toast={toastState} onDismiss={dismissToast} />}
+  </AppDataContext.Provider>
+}
+
+const TOAST_ICONS = { success: CheckCircle2, error: AlertCircle, info: Info } as const
+
+/** One toast at a time; a new one replaces it (keyed by id). The timer pauses while the toast is hovered or focused. */
+function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: (id: number) => void }) {
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const paused = hovered || focused
+  const remainingRef = useRef(toast.tone === 'error' || toast.actionLabel ? 6000 : 3500)
+  const Icon = TOAST_ICONS[toast.tone]
+  const { id } = toast
+
+  useEffect(() => {
+    if (paused) return
+    const startedAt = Date.now()
+    const timer = window.setTimeout(() => onDismiss(id), Math.max(0, remainingRef.current))
+    return () => {
+      window.clearTimeout(timer)
+      remainingRef.current -= Date.now() - startedAt
+    }
+  }, [paused, id, onDismiss])
+
+  const onBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
   }
 
-  return <AppDataContext.Provider value={{ applications, syncState, toast: setToast, updateApplication, createApplication, replaceApplication }}>
-    {children}
-    {toast && <div className="toast"><CheckCircle2 size={18} />{toast}</div>}
-  </AppDataContext.Provider>
+  return <div
+    className={`toast ${toast.tone}`}
+    role={toast.tone === 'error' ? 'alert' : 'status'}
+    aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
+    onMouseEnter={() => setHovered(true)}
+    onMouseLeave={() => setHovered(false)}
+    onFocus={() => setFocused(true)}
+    onBlur={onBlur}
+  >
+    <Icon size={18} aria-hidden="true" />
+    <span className="toast-message">{toast.message}</span>
+    {toast.actionLabel && toast.onAction && <button type="button" className="toast-action" onClick={() => { toast.onAction?.(); onDismiss(id) }}>{toast.actionLabel}</button>}
+    <button type="button" className="toast-close" onClick={() => onDismiss(id)} aria-label="Đóng thông báo"><X size={16} /></button>
+  </div>
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -193,15 +323,90 @@ export function DashboardRoute() {
   return <Dashboard applications={applications} navigate={useNavigate()} />
 }
 
-export function ApplicationsRoute() {
-  const { applications, updateApplication, toast } = useAppData()
-  return <ApplicationsPage applications={applications} navigate={useNavigate()} onDelete={id => {
-    updateApplication(id, application => ({ ...application, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
-    toast('Đã xóa đơn ứng tuyển')
-  }} />
+/** Soft-deletes an application (the caller has already confirmed) and offers an undo that clears deletedAt again. */
+function softDeleteApplication(id: string, updateApplication: UpdateApplicationFn, toast: ToastFn) {
+  const now = new Date().toISOString()
+  updateApplication(id, application => ({ ...application, deletedAt: now, updatedAt: now }))
+  toast('Đã xóa đơn ứng tuyển', {
+    actionLabel: 'Hoàn tác',
+    onAction: () => {
+      updateApplication(id, application => ({ ...application, deletedAt: undefined, updatedAt: new Date().toISOString() }))
+      toast('Đã khôi phục đơn ứng tuyển')
+    },
+  })
 }
 
-function usePersonalTasks(toast: (message: string) => void) {
+/**
+ * The shared status-change flow. requestStatusChange commits at once with an undo toast, or first asks for an
+ * applied date when the target status needs one. Undo is a reverse transition appended to the immutable history.
+ * Render `statusModal` at page level, never inside a clickable row/card or a <form>.
+ */
+function useStatusChange(updateApplication: UpdateApplicationFn, toast: ToastFn) {
+  const [request, setRequest] = useState<{ application: Application; status: Status } | null>(null)
+
+  const commitStatusChange = useCallback((application: Application, status: Status, appliedAt?: string) => {
+    const captured: { previous?: Pick<Application, 'status' | 'appliedAt'> } = {}
+    updateApplication(application.id, current => {
+      captured.previous = { status: current.status, appliedAt: current.appliedAt }
+      return applyStatusChange(current, status, appliedAt)
+    })
+    const previous = captured.previous
+    if (!previous) return
+    toast(`Đã chuyển sang ${STATUS_META[status].label}`, {
+      actionLabel: 'Hoàn tác',
+      onAction: () => {
+        updateApplication(application.id, current => ({ ...applyStatusChange(current, previous.status), appliedAt: previous.appliedAt }))
+        toast(`Đã hoàn tác, trạng thái trở lại ${STATUS_META[previous.status].label}`)
+      },
+    })
+  }, [updateApplication, toast])
+
+  const requestStatusChange = useCallback((application: Application, status: Status) => {
+    if (status === application.status) return
+    if (NEEDS_APPLIED_DATE.includes(status) && !application.appliedAt) {
+      setRequest({ application, status })
+      return
+    }
+    commitStatusChange(application, status)
+  }, [commitStatusChange])
+
+  const statusModal = request ? <StatusModal
+    application={request.application}
+    initialStatus={request.status}
+    onClose={() => setRequest(null)}
+    onSave={(status, appliedAt) => {
+      setRequest(null)
+      commitStatusChange(request.application, status, appliedAt)
+    }}
+  /> : null
+
+  return { requestStatusChange, commitStatusChange, statusModal }
+}
+
+/**
+ * Finds a live application for a detail/edit route. While the local cache has not been read yet, or the id is
+ * unknown and Supabase is still connecting, it reports `loading` (at most 5s) instead of a false "not found".
+ */
+function useApplicationById(id: string) {
+  const { applications, ready, syncState } = useAppData()
+  const application = applications.find(item => item.id === id && !item.deletedAt)
+  const known = applications.some(item => item.id === id)
+  const waiting = !application && (!ready || (!known && syncState === 'connecting'))
+  const [timedOutId, setTimedOutId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!waiting) return
+    const timer = window.setTimeout(() => setTimedOutId(id), 5000)
+    return () => window.clearTimeout(timer)
+  }, [waiting, id])
+  return { application, loading: waiting && timedOutId !== id }
+}
+
+export function ApplicationsRoute() {
+  const { applications, updateApplication, toast } = useAppData()
+  return <ApplicationsPage applications={applications} navigate={useNavigate()} onDelete={id => softDeleteApplication(id, updateApplication, toast)} />
+}
+
+function usePersonalTasks(toast: ToastFn) {
   const [tasks, setTasks] = useState<PersonalTask[]>([])
   const latest = useRef(tasks)
   useEffect(() => { latest.current = tasks }, [tasks])
@@ -212,7 +417,7 @@ function usePersonalTasks(toast: (message: string) => void) {
       .then(remote => { if (active) setTasks(remote) })
       .catch(error => {
         console.error('Loading personal tasks failed', error)
-        if (active) toast('Không tải được công việc cá nhân từ database')
+        if (active) toast('Không tải được công việc cá nhân từ database', { tone: 'error' })
       })
     return () => { active = false }
   }, [toast])
@@ -228,7 +433,7 @@ function usePersonalTasks(toast: (message: string) => void) {
     } catch (error) {
       console.error('Saving personal task failed', error)
       setTasks(previous)
-      toast('Không lưu được công việc vào database')
+      toast('Không lưu được công việc vào database', { tone: 'error' })
     }
   }, [toast])
 
@@ -261,8 +466,8 @@ export function NewApplicationRoute() {
 export function EditApplicationRoute({ id }: { id: string }) {
   const navigate = useNavigate()
   const { applications, replaceApplication, toast } = useAppData()
-  const application = applications.find(item => item.id === id && !item.deletedAt)
-  if (!application) return <NotFound navigate={navigate} />
+  const { application, loading } = useApplicationById(id)
+  if (!application) return loading ? <DetailSkeleton /> : <NotFound navigate={navigate} />
   return <ApplicationForm application={application} applications={applications} onCancel={() => navigate(`/applications/${id}`)} onSave={next => {
     replaceApplication(next)
     toast('Đã lưu thay đổi')
@@ -272,14 +477,27 @@ export function EditApplicationRoute({ id }: { id: string }) {
 
 export function ApplicationDetailRoute({ id }: { id: string }) {
   const navigate = useNavigate()
-  const { applications, updateApplication, toast } = useAppData()
-  const application = applications.find(item => item.id === id && !item.deletedAt)
-  if (!application) return <NotFound navigate={navigate} />
-  return <ApplicationDetail application={application} update={updater => updateApplication(id, updater)} onDelete={() => {
-    updateApplication(id, item => ({ ...item, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
-    toast('Đã xóa đơn ứng tuyển')
-    navigate('/applications')
-  }} navigate={navigate} toast={toast} />
+  const { updateApplication, toast } = useAppData()
+  const { application, loading } = useApplicationById(id)
+  const { commitStatusChange, statusModal } = useStatusChange(updateApplication, toast)
+  // Set on delete so the frame before navigation lands shows the skeleton, not "Không tìm thấy".
+  const [leaving, setLeaving] = useState(false)
+  if (!application) return loading || leaving ? <DetailSkeleton /> : <NotFound navigate={navigate} />
+  return <>
+    <ApplicationDetail
+      application={application}
+      update={updater => updateApplication(id, updater)}
+      onChangeStatus={(status, appliedAt) => commitStatusChange(application, status, appliedAt)}
+      onDelete={() => {
+        setLeaving(true)
+        softDeleteApplication(id, updateApplication, toast)
+        navigate('/applications')
+      }}
+      navigate={navigate}
+      toast={toast}
+    />
+    {statusModal}
+  </>
 }
 
 export function AccountRoute() {
@@ -356,7 +574,7 @@ function Dashboard({ applications, navigate }: { applications: Application[]; na
         {interviews.length ? interviews.map(item => <button key={item.id} className="schedule-item" onClick={() => navigate(`/applications/${item.app.id}`)}>
           <span className="schedule-date"><CalendarDays size={18} /><strong>{formatDate(item.startsAt)}</strong></span>
           <span className="schedule-copy"><strong>{item.title}</strong><small>{item.app.companyName}</small></span>
-          <time>{new Date(item.startsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.endsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time>
+          <time>{formatTime(item.startsAt)} – {formatTime(item.endsAt)}</time>
           <ChevronRight size={19} />
         </button>) : <EmptyMini icon={<CalendarDays />} text="Chưa có lịch phỏng vấn trong 7 ngày tới." />}
       </section>
@@ -400,10 +618,6 @@ const addCalendarDays = (value: Date, amount: number) => {
   date.setDate(date.getDate() + amount)
   return date
 }
-const calendarDateKey = (value: Date | string) => {
-  const date = typeof value === 'string' ? new Date(value) : value
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 const calendarStateFromParams = (params: { get: (name: string) => string | null }) => {
   const view: CalendarView = params.get('view') === 'month' ? 'month' : 'week'
   const dateValue = params.get('date')
@@ -415,8 +629,8 @@ const calendarStateFromParams = (params: { get: (name: string) => string | null 
 function CalendarPage({ applications, navigate, updateApplication, toast }: {
   applications: Application[]
   navigate: (path: string) => void
-  updateApplication: (id: string, updater: (app: Application) => Application) => void
-  toast: (message: string) => void
+  updateApplication: UpdateApplicationFn
+  toast: ToastFn
 }) {
   const searchParams = useSearchParams()
   const [cursor, setCursor] = useState(() => calendarStateFromParams(searchParams).cursor)
@@ -439,7 +653,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
   const [deletingTask, setDeletingTask] = useState<PersonalTask | null>(null)
   const personalTasks = usePersonalTasks(toast)
   const activeApplications = applications.filter(application => !application.deletedAt)
-  const todayKey = calendarDateKey(new Date())
+  const currentDayKey = calendarDateKey(new Date())
   const events = useMemo<CalendarEvent[]>(() => [
     ...personalTasks.tasks.map(personal => ({
       id: personal.id,
@@ -730,7 +944,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
           const dayKey = calendarDateKey(day)
           const dayEvents = events.filter(event => calendarDateKey(event.startsAt) === dayKey)
           const outsideMonth = day.getMonth() !== cursor.getMonth()
-          return <button key={dayKey} className={`calendar-day ${outsideMonth ? 'outside' : ''} ${dayKey === todayKey ? 'today' : ''} ${dropTarget === `month-${dayKey}` ? 'drop-target' : ''}`} onClick={() => openCreate(day)} onDragOver={drag => { if (!draggingEvent) return; drag.preventDefault(); drag.dataTransfer.dropEffect = 'move'; setDropTarget(`month-${dayKey}`) }} onDrop={drop => { drop.preventDefault(); if (draggingEvent) moveToMonthDay(draggingEvent, day) }}>
+          return <button key={dayKey} className={`calendar-day ${outsideMonth ? 'outside' : ''} ${dayKey === currentDayKey ? 'today' : ''} ${dropTarget === `month-${dayKey}` ? 'drop-target' : ''}`} onClick={() => openCreate(day)} onDragOver={drag => { if (!draggingEvent) return; drag.preventDefault(); drag.dataTransfer.dropEffect = 'move'; setDropTarget(`month-${dayKey}`) }} onDrop={drop => { drop.preventDefault(); if (draggingEvent) moveToMonthDay(draggingEvent, day) }}>
             <span className="calendar-day-number">{day.getDate()}</span>
             <span className="calendar-day-events">
               {dayEvents.slice(0, 4).map(event => <span
@@ -742,7 +956,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
                 onDragEnd={() => { setDraggingEvent(null); setDropTarget('') }}
               >
                 {event.kind !== 'interview' && <span className={`calendar-check ${event.completedAt ? 'checked' : ''}`} onClick={click => { click.stopPropagation(); toggleTask(event) }}>{event.completedAt && <Check size={11} />}</span>}
-                <time>{new Date(event.startsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time>
+                <time>{formatTime(event.startsAt)}</time>
                 <strong>{event.title}</strong>
               </span>)}
               {dayEvents.length > 4 && <span className="calendar-more">+{dayEvents.length - 4} công việc</span>}
@@ -753,7 +967,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
       </> : <div className="week-calendar">
         <div className="week-header">
           <span className="week-timezone">GMT+7</span>
-          {weekDays.map((day, index) => <button key={calendarDateKey(day)} className={calendarDateKey(day) === todayKey ? 'today' : ''} onClick={() => openCreate(day)}>
+          {weekDays.map((day, index) => <button key={calendarDateKey(day)} className={calendarDateKey(day) === currentDayKey ? 'today' : ''} onClick={() => openCreate(day)}>
             <small>{['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][index]}</small><strong>{day.getDate()}</strong>
           </button>)}
         </div>
@@ -767,7 +981,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
               const previewOnDay = weekMovePreview && calendarDateKey(weekMovePreview.start) === dayKey ? weekMovePreview : null
               const createPreviewOnDay = weekCreatePreview && calendarDateKey(weekCreatePreview.day) === dayKey ? weekCreatePreview : null
               const dayEvents = events.filter(event => calendarDateKey(event.startsAt) === dayKey && !(weekMovePreview && weekMovePreview.event.id === event.id && weekMovePreview.event.kind === event.kind))
-              return <div data-week-column data-date={dayKey} key={dayKey} className={`week-column ${dayKey === todayKey ? 'today' : ''} ${previewOnDay || createPreviewOnDay ? 'drop-target' : ''}`} onPointerDown={pointer => {
+              return <div data-week-column data-date={dayKey} key={dayKey} className={`week-column ${dayKey === currentDayKey ? 'today' : ''} ${previewOnDay || createPreviewOnDay ? 'drop-target' : ''}`} onPointerDown={pointer => {
                 if (pointer.target !== pointer.currentTarget || (pointer.pointerType === 'mouse' && pointer.button !== 0)) return
                 const firstMinute = weekStartHour * 60
                 const lastMinute = weekEndHour * 60
@@ -790,18 +1004,18 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
                   const height = Math.max(38, Math.min(120, (end.getTime() - start.getTime()) / 3600000 * weekHourHeight))
                   if (start.getHours() < weekStartHour || start.getHours() >= weekEndHour) return null
                   return <button key={`${event.kind}-${event.id}`} className={`week-event ${event.kind} ${event.completedAt ? 'completed' : ''}`} style={{ top, height }} onPointerDown={pointer => { if (pointer.pointerType === 'mouse' && pointer.button !== 0) return; pointer.stopPropagation(); const rect = pointer.currentTarget.getBoundingClientRect(); didWeekDragRef.current = false; weekDragRef.current = { event, grabOffset: pointer.clientY - rect.top, originX: pointer.clientX, originY: pointer.clientY, started: false } }} onClick={click => { click.stopPropagation(); if (!didWeekDragRef.current) setEventContext({ event, x: click.clientX, y: click.clientY }) }}>
-                    <strong>{event.title}</strong><time>{start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{event.application?.companyName ?? 'Việc cá nhân'}</small>
+                    <strong>{event.title}</strong><time>{formatTime(start)}</time><small>{event.application?.companyName ?? 'Việc cá nhân'}</small>
                   </button>
                 })}
                 {previewOnDay && (() => {
                   const top = ((previewOnDay.start.getHours() + previewOnDay.start.getMinutes() / 60) - weekStartHour) * weekHourHeight
                   const height = Math.max(38, Math.min(120, (previewOnDay.end.getTime() - previewOnDay.start.getTime()) / 3600000 * weekHourHeight))
-                  return <span className={`week-event ${previewOnDay.event.kind} move-preview`} style={{ top, height }}><strong>{previewOnDay.event.title}</strong><time>{previewOnDay.start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time><small>{previewOnDay.event.application?.companyName ?? 'Việc cá nhân'}</small></span>
+                  return <span className={`week-event ${previewOnDay.event.kind} move-preview`} style={{ top, height }}><strong>{previewOnDay.event.title}</strong><time>{formatTime(previewOnDay.start)}</time><small>{previewOnDay.event.application?.companyName ?? 'Việc cá nhân'}</small></span>
                 })()}
                 {createPreviewOnDay && (() => {
                   const top = ((createPreviewOnDay.start.getHours() + createPreviewOnDay.start.getMinutes() / 60) - weekStartHour) * weekHourHeight
                   const height = Math.max(18, (createPreviewOnDay.end.getTime() - createPreviewOnDay.start.getTime()) / 3600000 * weekHourHeight)
-                  return <span className="week-event create-preview" style={{ top, height }}><strong>Công việc mới</strong><time>{createPreviewOnDay.start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} – {createPreviewOnDay.end.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></span>
+                  return <span className="week-event create-preview" style={{ top, height }}><strong>Công việc mới</strong><time>{formatTime(createPreviewOnDay.start)} – {formatTime(createPreviewOnDay.end)}</time></span>
                 })()}
               </div>
             })}
@@ -819,7 +1033,7 @@ function CalendarPage({ applications, navigate, updateApplication, toast }: {
           <button className="icon-button" onClick={() => setEventContext(null)} aria-label="Đóng"><X size={18} /></button>
         </div>
         <div className="calendar-context-details">
-          <p><Clock3 size={17} /><span><small>Thời gian</small><strong>{formatDateTime(eventContext.event.startsAt)}{eventContext.event.endsAt ? ` – ${new Date(eventContext.event.endsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}</strong></span></p>
+          <p><Clock3 size={17} /><span><small>Thời gian</small><strong>{formatDateTime(eventContext.event.startsAt)}{eventContext.event.endsAt ? ` – ${formatTime(eventContext.event.endsAt)}` : ''}</strong></span></p>
           {eventContext.event.application && <>
             <p><BriefcaseBusiness size={17} /><span><small>Ứng tuyển</small><strong>{eventContext.event.application.jobTitle}</strong><em>{eventContext.event.application.companyName}</em></span></p>
             <p><Sparkles size={17} /><span><small>Trạng thái</small><StatusBadge status={eventContext.event.application.status} /></span></p>
@@ -857,7 +1071,12 @@ function CalendarTaskModal({ initialDate, initialEndDate, editing, onClose, onSa
   const [endsAt, setEndsAt] = useState(toInputDateTime(initialEndDate.toISOString()))
   const [note, setNote] = useState(editing?.note ?? '')
   const invalid = !title.trim() || !dueAt || !endsAt || new Date(endsAt) <= new Date(dueAt)
-  return <Modal title={editing ? 'Sửa công việc' : 'Thêm công việc'} onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave({ title: title.trim(), note: note.trim() || undefined, startsAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString() })}>Lưu công việc</button></>}>
+  const dirty = title !== (editing?.title ?? '') || note !== (editing?.note ?? '')
+  const submit = () => {
+    if (invalid) return
+    onSave({ title: title.trim(), note: note.trim() || undefined, startsAt: new Date(dueAt).toISOString(), endsAt: new Date(endsAt).toISOString() })
+  }
+  return <Modal title={editing ? 'Sửa công việc' : 'Thêm công việc'} onClose={onClose} onSubmit={submit} dirty={dirty} footer={<><button type="button" className="secondary" onClick={onClose}>Hủy</button><button type="submit" className="primary" disabled={invalid}>Lưu công việc</button></>}>
     <div className="form-grid">
       <Field label="Tên công việc" required><input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Gửi portfolio cập nhật" /></Field>
       <div className="form-grid two"><Field label="Bắt đầu" required><input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></Field><Field label="Kết thúc" required error={dueAt && endsAt && new Date(endsAt) <= new Date(dueAt) ? 'Giờ kết thúc phải sau giờ bắt đầu' : undefined}><input type="datetime-local" value={endsAt} onChange={event => setEndsAt(event.target.value)} /></Field></div>
@@ -970,12 +1189,12 @@ function ApplicationsPage({ applications, navigate, onDelete }: { applications: 
 
 function StatusBadge({ status }: { status: Status }) { const meta = STATUS_META[status]; return <span className={`status-badge ${meta.tone}`}>{meta.label}</span> }
 
-function StatusPicker({ value, onChange }: { value: Status; onChange: (status: Status) => void }) {
+function StatusPicker({ value, onChange, autoFocusSelected = false }: { value: Status; onChange: (status: Status) => void; autoFocusSelected?: boolean }) {
   return <div className="status-picker" role="radiogroup" aria-label="Trạng thái đơn ứng tuyển">
     {STATUSES.map(status => {
       const meta = STATUS_META[status]
       const selected = value === status
-      return <button type="button" role="radio" aria-checked={selected} key={status} className={`status-choice ${meta.tone} ${selected ? 'selected' : ''}`} onClick={() => onChange(status)}>
+      return <button type="button" role="radio" aria-checked={selected} key={status} data-autofocus={autoFocusSelected && selected ? '' : undefined} className={`status-choice ${meta.tone} ${selected ? 'selected' : ''}`} onClick={() => onChange(status)}>
         <strong>{meta.label}</strong>
         {selected && <Check size={16} />}
       </button>
@@ -995,7 +1214,8 @@ function ApplicationForm({ application, applications, onSave, onCancel }: { appl
   const [errors, setErrors] = useState<Record<string, string>>({})
   const set = (key: keyof ApplicationDraft, value: string) => setDraft(v => ({ ...v, [key]: value || undefined }))
   const duplicate = draft.jobUrl && applications.find(a => a.id !== application?.id && !a.deletedAt && a.jobUrl === draft.jobUrl)
-  const needsAppliedDate = ['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER'].includes(draft.status)
+  const needsAppliedDate = NEEDS_APPLIED_DATE.includes(draft.status)
+  const today = useTodayKey()
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -1004,16 +1224,14 @@ function ApplicationForm({ application, applications, onSave, onCancel }: { appl
     if (!draft.jobTitle?.trim()) next.jobTitle = 'Vui lòng nhập vị trí ứng tuyển'
     if (draft.jobUrl && !/^https?:\/\//i.test(draft.jobUrl)) next.jobUrl = 'URL phải bắt đầu bằng http:// hoặc https://'
     if (draft.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.contactEmail)) next.contactEmail = 'Email chưa đúng định dạng'
-    if (draft.appliedAt && draft.appliedAt > new Date().toISOString().slice(0, 10)) next.appliedAt = 'Ngày ứng tuyển không thể ở tương lai'
+    if (draft.appliedAt && draft.appliedAt > todayKey()) next.appliedAt = 'Ngày ứng tuyển không thể ở tương lai'
     if (needsAppliedDate && !draft.appliedAt) next.appliedAt = 'Trạng thái này cần ngày ứng tuyển'
     setErrors(next)
     if (Object.keys(next).length) { document.querySelector('.field-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return }
     const now = new Date().toISOString()
-    const statusChanged = application && application.status !== draft.status
-    const base: Application = application ? {
-      ...application, ...draft, companyName: draft.companyName!.trim(), jobTitle: draft.jobTitle!.trim(), updatedAt: now,
-      activities: statusChanged ? [{ id: uid(), type: 'STATUS_CHANGED', createdAt: now, label: `Chuyển sang ${STATUS_META[draft.status].label}`, detail: `Từ ${STATUS_META[application.status].label}` }, ...application.activities] : application.activities,
-    } : {
+    const edited: Application | undefined = application && { ...application, ...draft, companyName: draft.companyName!.trim(), jobTitle: draft.jobTitle!.trim(), updatedAt: now }
+    // A status edit goes through the shared rule, so it appends the same STATUS_CHANGED entry as every other path.
+    const base: Application = application && edited ? (application.status !== draft.status ? applyStatusChange({ ...edited, status: application.status }, draft.status) : edited) : {
       ...draft, companyName: draft.companyName!.trim(), jobTitle: draft.jobTitle!.trim(), id: uid(), createdAt: now, updatedAt: now,
       activities: [{ id: uid(), type: 'CREATED', createdAt: now, label: 'Đã tạo đơn ứng tuyển' }], appNotes: [], interviews: [], tasks: [],
     }
@@ -1035,7 +1253,7 @@ function ApplicationForm({ application, applications, onSave, onCancel }: { appl
       <FormSection number="02" title="Quá trình ứng tuyển">
         <div className="form-grid three">
           <Field label="Trạng thái"><select value={draft.status} onChange={event => set('status', event.target.value)}>{STATUSES.map(status => <option key={status} value={status}>{STATUS_META[status].label}</option>)}</select></Field>
-          <Field label="Ngày ứng tuyển" required={needsAppliedDate} error={errors.appliedAt}><input type="date" max={new Date().toISOString().slice(0, 10)} value={draft.appliedAt || ''} onChange={e => set('appliedAt', e.target.value)} /></Field>
+          <Field label="Ngày ứng tuyển" required={needsAppliedDate} error={errors.appliedAt}><input type="date" max={today || undefined} value={draft.appliedAt || ''} onChange={e => set('appliedAt', e.target.value)} /></Field>
           <Field label="Hạn nộp hồ sơ"><input type="date" value={draft.deadlineAt || ''} onChange={e => set('deadlineAt', e.target.value)} /></Field>
           <Field label="Nguồn ứng tuyển"><input list="sources" value={draft.source || ''} onChange={e => set('source', e.target.value)} placeholder="LinkedIn, giới thiệu..." /><datalist id="sources"><option value="LinkedIn" /><option value="Website công ty" /><option value="Referral" /><option value="TopCV" /></datalist></Field>
           <Field label="Mức lương"><input maxLength={100} value={draft.salaryText || ''} onChange={e => set('salaryText', e.target.value)} placeholder="Ví dụ: 30–40 triệu" /></Field>
@@ -1063,7 +1281,7 @@ function Field({ label, required, error, wide, children }: { label: string; requ
   return <label className={`field ${wide ? 'wide' : ''} ${error ? 'field-error' : ''}`}><span>{label}{required && <b> *</b>}</span>{children}{error && <em><AlertCircle size={14} />{error}</em>}</label>
 }
 
-function ApplicationDetail({ application, update, onDelete, navigate, toast }: { application: Application; update: (fn: (a: Application) => Application) => void; onDelete: () => void; navigate: (s: string) => void; toast: (s: string) => void }) {
+function ApplicationDetail({ application, update, onChangeStatus, onDelete, navigate, toast }: { application: Application; update: (fn: (a: Application) => Application) => void; onChangeStatus: (status: Status, appliedAt?: string) => void; onDelete: () => void; navigate: (s: string) => void; toast: ToastFn }) {
   const [tab, setTab] = useState<'timeline' | 'interviews' | 'tasks'>('timeline')
   const [modal, setModal] = useState<'status' | 'note' | 'interview' | 'task' | 'delete' | null>(null)
   const info = [
@@ -1073,11 +1291,8 @@ function ApplicationDetail({ application, update, onDelete, navigate, toast }: {
     { icon: Link2, label: 'Nguồn', value: application.source || 'Chưa cập nhật' },
   ]
 
-  const changeStatus = (status: Status, appliedAt?: string) => {
-    const now = new Date().toISOString()
-    update(a => ({ ...a, status, appliedAt: appliedAt || a.appliedAt, updatedAt: now, activities: [{ id: uid(), type: 'STATUS_CHANGED', createdAt: now, label: `Chuyển sang ${STATUS_META[status].label}`, detail: `Từ ${STATUS_META[a.status].label}` }, ...a.activities] }))
-    setModal(null); toast('Đã cập nhật trạng thái')
-  }
+  // applyStatusChange via useStatusChange: appends STATUS_CHANGED and shows the 'Hoàn tác' toast.
+  const changeStatus = (status: Status, appliedAt?: string) => { setModal(null); onChangeStatus(status, appliedAt) }
   const addNote = (content: string) => {
     const now = new Date().toISOString(); const note: Note = { id: uid(), content, createdAt: now, updatedAt: now }
     update(a => ({ ...a, updatedAt: now, appNotes: [note, ...a.appNotes], activities: [{ id: uid(), type: 'NOTE_ADDED', createdAt: now, label: 'Đã thêm ghi chú', detail: content }, ...a.activities] }))
@@ -1143,17 +1358,17 @@ function Timeline({ application, addNote, update }: { application: Application; 
   </div>
 }
 
-function Interviews({ application, onAdd, update, toast }: { application: Application; onAdd: () => void; update: (fn: (a: Application) => Application) => void; toast: (s: string) => void }) {
+function Interviews({ application, onAdd, update, toast }: { application: Application; onAdd: () => void; update: (fn: (a: Application) => Application) => void; toast: ToastFn }) {
   const cancel = (item: Interview) => {
     const now = new Date().toISOString()
     update(a => ({ ...a, interviews: a.interviews.map(i => i.id === item.id ? { ...i, cancelledAt: now } : i), activities: [{ id: uid(), type: 'INTERVIEW_CANCELLED', createdAt: now, label: 'Đã hủy lịch phỏng vấn', detail: item.title }, ...a.activities] })); toast('Đã hủy lịch phỏng vấn')
   }
   return <div className="tab-content"><div className="tab-toolbar"><h3>Các buổi phỏng vấn</h3><button className="secondary compact" onClick={onAdd}><Plus size={17} /> Tạo lịch</button></div>
-    {application.interviews.length ? <div className="interview-list">{application.interviews.map(i => <div className={`interview-card ${i.cancelledAt ? 'cancelled' : ''}`} key={i.id}><span className="interview-format">{i.format === 'online' ? <Video /> : i.format === 'phone' ? <Phone /> : <MapPin />}</span><div><div><strong>{i.title}</strong>{i.cancelledAt && <span className="cancelled-label">Đã hủy</span>}</div><p><CalendarDays size={15} />{formatDateTime(i.startsAt)} – {new Date(i.endsAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>{i.interviewer && <small>Với {i.interviewer}</small>}</div>{!i.cancelledAt && <button className="icon-button danger-hover" onClick={() => cancel(i)} aria-label="Hủy lịch"><X size={17} /></button>}</div>)}</div> : <EmptyTab icon={<CalendarDays />} title="Chưa có lịch phỏng vấn" text="Tạo lịch để luôn chủ động cho vòng tiếp theo." action="Tạo lịch phỏng vấn" onAction={onAdd} />}
+    {application.interviews.length ? <div className="interview-list">{application.interviews.map(i => <div className={`interview-card ${i.cancelledAt ? 'cancelled' : ''}`} key={i.id}><span className="interview-format">{i.format === 'online' ? <Video /> : i.format === 'phone' ? <Phone /> : <MapPin />}</span><div><div><strong>{i.title}</strong>{i.cancelledAt && <span className="cancelled-label">Đã hủy</span>}</div><p><CalendarDays size={15} />{formatDateTime(i.startsAt)} – {formatTime(i.endsAt)}</p>{i.interviewer && <small>Với {i.interviewer}</small>}</div>{!i.cancelledAt && <button className="icon-button danger-hover" onClick={() => cancel(i)} aria-label="Hủy lịch"><X size={17} /></button>}</div>)}</div> : <EmptyTab icon={<CalendarDays />} title="Chưa có lịch phỏng vấn" text="Tạo lịch để luôn chủ động cho vòng tiếp theo." action="Tạo lịch phỏng vấn" onAction={onAdd} />}
   </div>
 }
 
-function Tasks({ application, onAdd, update, toast }: { application: Application; onAdd: () => void; update: (fn: (a: Application) => Application) => void; toast: (s: string) => void }) {
+function Tasks({ application, onAdd, update, toast }: { application: Application; onAdd: () => void; update: (fn: (a: Application) => Application) => void; toast: ToastFn }) {
   const toggle = (task: JobTask) => { update(a => ({ ...a, tasks: a.tasks.map(t => t.id === task.id ? { ...t, completedAt: t.completedAt ? undefined : new Date().toISOString() } : t), activities: task.completedAt ? a.activities : [{ id: uid(), type: 'TASK_COMPLETED', createdAt: new Date().toISOString(), label: 'Đã hoàn thành công việc', detail: task.title }, ...a.activities] })); toast(task.completedAt ? 'Đã mở lại công việc' : 'Đã hoàn thành công việc') }
   const remove = (id: string) => update(a => ({ ...a, tasks: a.tasks.filter(t => t.id !== id) }))
   return <div className="tab-content"><div className="tab-toolbar"><h3>Việc cần làm</h3><button className="secondary compact" onClick={onAdd}><Plus size={17} /> Thêm việc</button></div>
@@ -1163,43 +1378,204 @@ function Tasks({ application, onAdd, update, toast }: { application: Application
 
 function EmptyTab({ icon, title, text, action, onAction }: { icon: ReactNode; title: string; text: string; action: string; onAction: () => void }) { return <div className="empty-tab"><span>{icon}</span><h3>{title}</h3><p>{text}</p><button className="secondary" onClick={onAction}><Plus size={16} />{action}</button></div> }
 
-function Modal({ title, description, onClose, children, footer }: { title: string; description?: string; onClose: () => void; children: ReactNode; footer: ReactNode }) {
-  useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h) }, [onClose])
-  return <div className="modal-backdrop" role="presentation" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="modal" role="dialog" aria-modal="true"><div className="modal-head"><div><h2>{title}</h2>{description && <p>{description}</p>}</div><button className="icon-button" onClick={onClose}><X size={20} /></button></div><div className="modal-body">{children}</div><div className="modal-footer">{footer}</div></div></div>
+const MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Accessible dialog. With `onSubmit`, body and footer are wrapped in a <form>: the footer's primary button must be
+ * type="submit" and every other footer button type="button". Never render a Modal with onSubmit inside another <form>.
+ * `dirty` ignores backdrop clicks so typed input is not lost; Escape still closes.
+ */
+function Modal({ title, description, onClose, onSubmit, dirty = false, children, footer }: {
+  title: string
+  description?: string
+  onClose: () => void
+  onSubmit?: () => void
+  dirty?: boolean
+  children: ReactNode
+  footer: ReactNode
+}) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const modalRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+  // Read during the first render, before React applies autoFocus inside the dialog, so focus can return to the opener.
+  const [opener] = useState(() => typeof document === 'undefined' ? null : document.activeElement)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
+  // Mount-only: a parent re-render with a fresh onClose never re-runs this, so focus never jumps.
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const body = document.body
+    const previousOverflow = body.style.overflow
+    const previousPaddingRight = body.style.paddingRight
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+    body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`
+
+    if (!modal.contains(document.activeElement)) {
+      const initial = modal.querySelector<HTMLElement>('[autofocus], [data-autofocus]')
+        ?? modal.querySelector<HTMLElement>('.modal-body :is(input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]))')
+        ?? closeRef.current
+      initial?.focus()
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modals = document.querySelectorAll('.modal')
+      if (modals[modals.length - 1] !== modal) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(modal.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE)).filter(element => element.getClientRects().length > 0)
+      if (!focusable.length) { event.preventDefault(); return }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey ? active === first || !modal.contains(active) : active === last || !modal.contains(active)) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first).focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      body.style.overflow = previousOverflow
+      body.style.paddingRight = previousPaddingRight
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true })
+    }
+  }, [opener])
+
+  // Ctrl/Cmd+Enter in a textarea submits, unless the submit button is disabled.
+  const submitFromTextarea = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.nativeEvent.isComposing || !(event.target instanceof HTMLTextAreaElement)) return
+    event.preventDefault()
+    const submitter = event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitter?.disabled) return
+    event.currentTarget.requestSubmit(submitter ?? undefined)
+  }
+
+  const content = <>
+    <div className="modal-body">{children}</div>
+    <div className="modal-footer">{footer}</div>
+  </>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => {
+    if (event.target !== event.currentTarget) return
+    event.preventDefault() // keep focus inside the dialog when the click is ignored
+    if (!dirty) onClose()
+  }}>
+    <div ref={modalRef} className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
+      <div className="modal-head">
+        <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
+        <button ref={closeRef} type="button" className="icon-button" onClick={onClose} aria-label="Đóng"><X size={20} /></button>
+      </div>
+      {onSubmit ? <form noValidate onSubmit={event => { event.preventDefault(); onSubmit() }} onKeyDown={submitFromTextarea}>{content}</form> : content}
+    </div>
+  </div>
 }
 
-function StatusModal({ application, onClose, onSave }: { application: Application; onClose: () => void; onSave: (s: Status, date?: string) => void }) {
-  const [status, setStatus] = useState(application.status)
-  const [date, setDate] = useState(application.appliedAt || '')
-  const needsDate = ['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER'].includes(status)
-  return <Modal title="Cập nhật trạng thái" description="Chọn giai đoạn hiện tại của đơn ứng tuyển." onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={status === application.status || (needsDate && !date)} onClick={() => onSave(status, date)}>Lưu trạng thái</button></>}>
-    <StatusPicker value={status} onChange={setStatus} />
-    {needsDate && <Field label="Ngày ứng tuyển" required><input type="date" max={new Date().toISOString().slice(0, 10)} value={date} onChange={e => setDate(e.target.value)} /></Field>}
+function StatusModal({ application, initialStatus, onClose, onSave }: { application: Application; initialStatus?: Status; onClose: () => void; onSave: (status: Status, appliedAt?: string) => void }) {
+  const [status, setStatus] = useState<Status>(initialStatus ?? application.status)
+  const [date, setDate] = useState(() => application.appliedAt || todayKey())
+  const hintId = useId()
+  const today = todayKey()
+  const needsDate = NEEDS_APPLIED_DATE.includes(status)
+  const unchanged = status === application.status
+  const futureDate = needsDate && date > today
+  const invalid = unchanged || (needsDate && (!date || futureDate))
+  const submit = () => { if (!invalid) onSave(status, needsDate ? date : undefined) }
+  return <Modal title="Cập nhật trạng thái" description="Chọn giai đoạn hiện tại của đơn ứng tuyển." onClose={onClose} onSubmit={submit} dirty={status !== (initialStatus ?? application.status)} footer={<><button type="button" className="secondary" onClick={onClose}>Hủy</button><button type="submit" className="primary" disabled={invalid} aria-describedby={unchanged ? hintId : undefined}>Lưu trạng thái</button></>}>
+    <StatusPicker value={status} onChange={setStatus} autoFocusSelected={!initialStatus} />
+    {needsDate && <Field label="Ngày ứng tuyển" required error={futureDate ? 'Ngày ứng tuyển không thể ở tương lai' : undefined}><input type="date" autoFocus={Boolean(initialStatus)} max={today} value={date} onChange={e => setDate(e.target.value)} /></Field>}
+    {unchanged && <p className="modal-hint" id={hintId}>Chọn trạng thái khác với hiện tại</p>}
   </Modal>
 }
 
-function NoteModal({ onClose, onSave }: { onClose: () => void; onSave: (s: string) => void }) { const [text, setText] = useState(''); return <Modal title="Thêm ghi chú" onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={!text.trim()} onClick={() => onSave(text.trim())}>Thêm ghi chú</button></>}><Field label="Nội dung" required><textarea autoFocus rows={5} maxLength={2000} value={text} onChange={e => setText(e.target.value)} placeholder="Ghi lại nội dung trao đổi, điều cần nhớ..." /></Field></Modal> }
+function NoteModal({ onClose, onSave }: { onClose: () => void; onSave: (s: string) => void }) {
+  const [text, setText] = useState('')
+  const submit = () => { if (text.trim()) onSave(text.trim()) }
+  return <Modal title="Thêm ghi chú" onClose={onClose} onSubmit={submit} dirty={Boolean(text.trim())} footer={<><button type="button" className="secondary" onClick={onClose}>Hủy</button><button type="submit" className="primary" disabled={!text.trim()}>Thêm ghi chú</button></>}>
+    <Field label="Nội dung" required><textarea autoFocus rows={5} maxLength={2000} value={text} onChange={e => setText(e.target.value)} placeholder="Ghi lại nội dung trao đổi, điều cần nhớ..." /></Field>
+  </Modal>
+}
 
 function InterviewModal({ onClose, onSave }: { onClose: () => void; onSave: (i: Interview) => void }) {
+  const [defaults] = useState(() => ({ start: toInputDateTime(new Date(Date.now() + 864e5).toISOString()), end: toInputDateTime(new Date(Date.now() + 90000000).toISOString()) }))
   const [title, setTitle] = useState('Phỏng vấn vòng chuyên môn')
-  const [start, setStart] = useState(() => toInputDateTime(new Date(Date.now() + 864e5).toISOString()))
-  const [end, setEnd] = useState(() => toInputDateTime(new Date(Date.now() + 90000000).toISOString()))
+  const [start, setStart] = useState(defaults.start)
+  const [end, setEnd] = useState(defaults.end)
   const [format, setFormat] = useState<Interview['format']>('online')
   const [place, setPlace] = useState('')
   const [interviewer, setInterviewer] = useState('')
   const invalid = !title.trim() || !start || !end || new Date(end) <= new Date(start)
-  return <Modal title="Tạo lịch phỏng vấn" onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={invalid} onClick={() => onSave({ id: uid(), title: title.trim(), startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(), timeZone: 'Asia/Ho_Chi_Minh', format, locationOrMeetingUrl: place, interviewer })}>Tạo lịch</button></>}>
+  const dirty = title !== 'Phỏng vấn vòng chuyên môn' || start !== defaults.start || end !== defaults.end || format !== 'online' || Boolean(place || interviewer)
+  const submit = () => {
+    if (invalid) return
+    onSave({ id: uid(), title: title.trim(), startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(), timeZone: 'Asia/Ho_Chi_Minh', format, locationOrMeetingUrl: place, interviewer })
+  }
+  return <Modal title="Tạo lịch phỏng vấn" onClose={onClose} onSubmit={submit} dirty={dirty} footer={<><button type="button" className="secondary" onClick={onClose}>Hủy</button><button type="submit" className="primary" disabled={invalid}>Tạo lịch</button></>}>
     <div className="form-grid two"><Field label="Tên buổi phỏng vấn" required wide><input value={title} onChange={e => setTitle(e.target.value)} /></Field><Field label="Bắt đầu" required><input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></Field><Field label="Kết thúc" required error={start && end && new Date(end) <= new Date(start) ? 'Giờ kết thúc phải sau giờ bắt đầu' : undefined}><input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></Field><Field label="Hình thức"><select value={format} onChange={e => setFormat(e.target.value as Interview['format'])}><option value="online">Trực tuyến</option><option value="onsite">Tại văn phòng</option><option value="phone">Điện thoại</option></select></Field><Field label="Địa điểm / Link họp"><input value={place} onChange={e => setPlace(e.target.value)} placeholder="Link Meet hoặc địa chỉ" /></Field><Field label="Người phỏng vấn" wide><input value={interviewer} onChange={e => setInterviewer(e.target.value)} placeholder="Tên và chức danh (nếu có)" /></Field></div>
   </Modal>
 }
 
-function TaskModal({ onClose, onSave }: { onClose: () => void; onSave: (t: JobTask) => void }) { const [title, setTitle] = useState(''); const [due, setDue] = useState(''); const [note, setNote] = useState(''); return <Modal title="Thêm việc cần làm" onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Hủy</button><button className="primary" disabled={!title.trim()} onClick={() => onSave({ id: uid(), title: title.trim(), dueAt: due ? new Date(due).toISOString() : undefined, note })}>Thêm việc</button></>}><div className="form-grid"><Field label="Tên công việc" required><input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="Ví dụ: Chuẩn bị portfolio" /></Field><Field label="Thời hạn"><input type="datetime-local" value={due} onChange={e => setDue(e.target.value)} /></Field><Field label="Ghi chú"><textarea rows={3} value={note} onChange={e => setNote(e.target.value)} /></Field></div></Modal> }
+function TaskModal({ onClose, onSave }: { onClose: () => void; onSave: (t: JobTask) => void }) {
+  const [title, setTitle] = useState('')
+  const [due, setDue] = useState('')
+  const [note, setNote] = useState('')
+  const submit = () => {
+    if (!title.trim()) return
+    onSave({ id: uid(), title: title.trim(), dueAt: due ? new Date(due).toISOString() : undefined, note })
+  }
+  return <Modal title="Thêm việc cần làm" onClose={onClose} onSubmit={submit} dirty={Boolean(title.trim() || due || note.trim())} footer={<><button type="button" className="secondary" onClick={onClose}>Hủy</button><button type="submit" className="primary" disabled={!title.trim()}>Thêm việc</button></>}>
+    <div className="form-grid"><Field label="Tên công việc" required><input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="Ví dụ: Chuẩn bị portfolio" /></Field><Field label="Thời hạn"><input type="datetime-local" value={due} onChange={e => setDue(e.target.value)} /></Field><Field label="Ghi chú"><textarea rows={3} value={note} onChange={e => setNote(e.target.value)} /></Field></div>
+  </Modal>
+}
 
-function ConfirmModal({ title, description, onClose, onConfirm }: { title: string; description: string; onClose: () => void; onConfirm: () => void }) { return <Modal title={title} description={description} onClose={onClose} footer={<><button className="secondary" onClick={onClose}>Giữ lại</button><button className="danger-button" onClick={onConfirm}><Trash2 size={17} /> Xóa đơn</button></>}><div className="confirm-warning"><AlertCircle size={22} /><p>Thao tác này là xóa mềm; dữ liệu được giữ lại để có thể khôi phục trong phiên bản sau.</p></div></Modal> }
+/** Confirmation dialog; defaults to the application soft-delete ('Xóa đơn', danger). */
+function ConfirmModal({ title, description, confirmLabel = 'Xóa đơn', tone = 'danger', body, onClose, onConfirm }: {
+  title: string
+  description: string
+  confirmLabel?: string
+  tone?: 'danger' | 'neutral'
+  body?: ReactNode
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return <Modal title={title} description={description} onClose={onClose} footer={<><button type="button" className="secondary" onClick={onClose}>Giữ lại</button><button type="button" className={tone === 'danger' ? 'danger-button' : 'primary'} onClick={onConfirm}>{tone === 'danger' && <Trash2 size={17} />}{confirmLabel}</button></>}>
+    {body ?? <div className="confirm-warning"><Info size={22} /><p>Bạn có thể hoàn tác ngay sau khi xóa.</p></div>}
+  </Modal>
+}
 
 function AccountPage({ syncState }: { syncState: SyncState }) {
   const storage = syncState === 'connected' ? 'Supabase + thiết bị này' : syncState === 'connecting' ? 'Đang kết nối Supabase' : 'Thiết bị này (chưa đồng bộ)'
   return <div className="page account-page"><PageHeader title="Không gian cá nhân" /><section className="panel account-card"><div className="profile-head"><span className="big-avatar">CN</span><h2>Chế độ cá nhân</h2><span className={`demo-chip ${syncState === 'connected' ? 'connected' : ''}`}>{syncState === 'connected' ? 'Đã kết nối' : 'Cục bộ'}</span></div><div className="account-row"><strong>Nơi lưu dữ liệu</strong><span>{storage}</span></div><div className="account-row"><strong>Múi giờ</strong><span>Asia/Ho_Chi_Minh (GMT+7)</span></div></section></div>
+}
+
+/** Placeholder for the detail/edit routes while data loads: hero line, 4 info blocks and the tab bar. */
+function DetailSkeleton() {
+  return <div className="page detail-page detail-skeleton" aria-busy="true">
+    <p className="sr-only" role="status">Đang tải đơn ứng tuyển…</p>
+    <span className="skeleton sk-back" />
+    <div className="detail-hero" aria-hidden="true">
+      <div><span className="skeleton sk-eyebrow" /><span className="skeleton sk-title" /><span className="skeleton sk-badge" /></div>
+      <div className="detail-actions"><span className="skeleton sk-button" /><span className="skeleton sk-button" /></div>
+    </div>
+    <div className="detail-layout" aria-hidden="true">
+      <div className="detail-main">
+        <section className="panel info-panel">
+          <div className="info-grid">{[0, 1, 2, 3].map(index => <div className="info-item" key={index}><span className="skeleton sk-icon" /><div><span className="skeleton sk-label" /><span className="skeleton sk-value" /></div></div>)}</div>
+        </section>
+        <section className="panel activity-panel">
+          <div className="tabs sk-tabs">{[0, 1, 2].map(index => <span className="skeleton sk-tab" key={index} />)}</div>
+          <div className="sk-rows">{[0, 1, 2].map(index => <span className="skeleton sk-row" key={index} />)}</div>
+        </section>
+      </div>
+      <aside className="detail-aside"><section className="panel"><span className="skeleton sk-label" /><span className="skeleton sk-row" /></section></aside>
+    </div>
+  </div>
 }
 
 function NotFound({ navigate }: { navigate: (s: string) => void }) { return <div className="page"><div className="empty-state large"><span><AlertCircle /></span><h1>Không tìm thấy đơn ứng tuyển</h1><p>Đơn này không tồn tại hoặc đã được xóa.</p><button className="primary" onClick={() => navigate('/applications')}>Về danh sách</button></div></div> }
