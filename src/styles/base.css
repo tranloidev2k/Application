@@ -13,7 +13,7 @@ strong { font-weight: 500; }
    unless a replacement ring is provided (see .search-box, .select-control and .field). */
 :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Full-bleed rows and cells draw the ring inside their own box. */
-.schedule-item:focus-visible, .task-row-link:focus-visible, .ghost-row:focus-visible, .pipeline-step-body:focus-visible, .table-row:focus-visible,
+.schedule-item:focus-visible, .task-row-link:focus-visible, .ghost-row:focus-visible, .pipeline-step-body:focus-visible,
 .calendar-day:focus-visible, .week-event:focus-visible, .week-header > button:focus-visible, .tabs button:focus-visible, .menu-item:focus-visible { outline-offset: -2px; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -56,3 +56,21 @@ export const formatTimeAgo = (iso: string, now: Date) => {
   if (diff === -1) return `Hôm qua ${formatTime(iso)}`
   return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()} ${formatTime(iso)}`
 }
+/** 'dd/MM', or 'dd/MM/yyyy' when the year differs from `now`. A bare 'yyyy-MM-dd' string is read as a local date. */
+export const formatDayMonth = (value: Date | string, now: Date) => {
+  const date = toDate(value)
+  const year = date.getFullYear() === now.getFullYear() ? '' : `/${date.getFullYear()}`
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}${year}`
+}
+/** 'vừa xong' | '5 phút trước' | '3 giờ trước' | '2 ngày trước' | '4 tháng trước' | '1 năm trước' (calendar days from `now`). */
+export const formatAgo = (iso: string, now: Date) => {
+  const date = new Date(iso)
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000)
+  if (minutes < 1) return 'vừa xong'
+  if (minutes < 60) return `${minutes} phút trước`
+  const days = -calendarDayDiff(date, now)
+  if (days <= 0) return `${Math.floor(minutes / 60)} giờ trước`
+  if (days < 30) return `${days} ngày trước`
+  if (days < 365) return `${Math.floor(days / 30)} tháng trước`
+  return `${Math.floor(days / 365)} năm trước`
+}

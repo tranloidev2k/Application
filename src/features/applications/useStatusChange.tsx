@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Application, Status, STATUS_META } from '../types'
-import type { ToastFn, UpdateApplicationFn } from '../context/AppDataContext'
-import { applyStatusChange, NEEDS_APPLIED_DATE } from '../utils/status'
-import { StatusModal } from '../features/applications/modals/StatusModal'
+import { Application, Status, STATUS_META } from '../../types'
+import type { ToastFn, UpdateApplicationFn } from '../../context/AppDataContext'
+import { applyStatusChange, NEEDS_APPLIED_DATE } from '../../utils/status'
+import { StatusModal } from './modals/StatusModal'
 
 /**
  * The shared status-change flow. requestStatusChange commits at once with an undo toast, or first asks for an

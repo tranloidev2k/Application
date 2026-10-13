@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useAppData } from '../../context/AppDataContext'
+import { useDelayElapsed } from '../../hooks/useDelayElapsed'
 import { useNow } from '../../hooks/useNow'
 import { usePersonalTasks } from '../../hooks/usePersonalTasks'
 import { useStoredFlag } from '../../hooks/useStoredFlag'
@@ -23,11 +24,7 @@ export function DashboardRoute() {
   const nowMs = useNow()
   const calendarVisited = useStoredFlag(CALENDAR_VISITED_FLAG)
   const setupDismissed = useStoredFlag(ONBOARDING_DISMISSED_FLAG)
-  const [skeletonCapped, setSkeletonCapped] = useState(false)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSkeletonCapped(true), SKELETON_CAP_MS)
-    return () => window.clearTimeout(timer)
-  }, [])
+  const skeletonCapped = useDelayElapsed(SKELETON_CAP_MS)
 
   const now = useMemo(() => new Date(nowMs), [nowMs])
   const data = useMemo(() => buildDashboardData(applications, now), [applications, now])

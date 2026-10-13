@@ -61,14 +61,14 @@ a.text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
 .select-control select { padding: 0 24px 0 3px; border: 0; outline: 0; appearance: none; background: transparent; color: var(--text-muted); font-size: var(--fs-base); cursor: pointer; }
 .select-control > svg:last-child { position: absolute; right: 9px; pointer-events: none; }
 
-/* -- Status: badge, choice, dot (tones come from STATUS_META) -- */
-.status-badge.slate, .status-choice.slate, .status-dot.slate { --tone-fg: var(--status-saved-fg); --tone-bg: var(--status-saved-bg); --tone-border: var(--status-saved-border); }
-.status-badge.blue, .status-choice.blue, .status-dot.blue { --tone-fg: var(--status-applied-fg); --tone-bg: var(--status-applied-bg); --tone-border: var(--status-applied-border); }
-.status-badge.amber, .status-choice.amber, .status-dot.amber { --tone-fg: var(--status-screening-fg); --tone-bg: var(--status-screening-bg); --tone-border: var(--status-screening-border); }
-.status-badge.violet, .status-choice.violet, .status-dot.violet { --tone-fg: var(--status-interview-fg); --tone-bg: var(--status-interview-bg); --tone-border: var(--status-interview-border); }
-.status-badge.green, .status-choice.green, .status-dot.green { --tone-fg: var(--status-offer-fg); --tone-bg: var(--status-offer-bg); --tone-border: var(--status-offer-border); }
-.status-badge.red, .status-choice.red, .status-dot.red { --tone-fg: var(--status-rejected-fg); --tone-bg: var(--status-rejected-bg); --tone-border: var(--status-rejected-border); }
-.status-badge.gray, .status-choice.gray, .status-dot.gray { --tone-fg: var(--status-withdrawn-fg); --tone-bg: var(--status-withdrawn-bg); --tone-border: var(--status-withdrawn-border); }
+/* -- Status: badge, choice, dot, filter tab (tones come from STATUS_META) -- */
+.status-badge.slate, .status-choice.slate, .status-dot.slate, .status-tab.slate { --tone-fg: var(--status-saved-fg); --tone-bg: var(--status-saved-bg); --tone-border: var(--status-saved-border); }
+.status-badge.blue, .status-choice.blue, .status-dot.blue, .status-tab.blue { --tone-fg: var(--status-applied-fg); --tone-bg: var(--status-applied-bg); --tone-border: var(--status-applied-border); }
+.status-badge.amber, .status-choice.amber, .status-dot.amber, .status-tab.amber { --tone-fg: var(--status-screening-fg); --tone-bg: var(--status-screening-bg); --tone-border: var(--status-screening-border); }
+.status-badge.violet, .status-choice.violet, .status-dot.violet, .status-tab.violet { --tone-fg: var(--status-interview-fg); --tone-bg: var(--status-interview-bg); --tone-border: var(--status-interview-border); }
+.status-badge.green, .status-choice.green, .status-dot.green, .status-tab.green { --tone-fg: var(--status-offer-fg); --tone-bg: var(--status-offer-bg); --tone-border: var(--status-offer-border); }
+.status-badge.red, .status-choice.red, .status-dot.red, .status-tab.red { --tone-fg: var(--status-rejected-fg); --tone-bg: var(--status-rejected-bg); --tone-border: var(--status-rejected-border); }
+.status-badge.gray, .status-choice.gray, .status-dot.gray, .status-tab.gray { --tone-fg: var(--status-withdrawn-fg); --tone-bg: var(--status-withdrawn-bg); --tone-border: var(--status-withdrawn-border); }
 
 .status-badge {
   min-height: 30px; padding: 0 11px;
