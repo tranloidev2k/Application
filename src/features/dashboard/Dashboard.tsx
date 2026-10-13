@@ -1,50 +1,42 @@
 'use client'
 
-import { CalendarDays, CheckCircle2, ChevronRight } from 'lucide-react'
-import { Application } from '../../types'
-import { calendarDateKey, formatDate, formatDateTime, formatTime } from '../../utils/date'
-import { PageHeader } from '../../components/layout/PageHeader'
-import { EmptyMini } from '../../components/ui/EmptyMini'
-import { Metric } from './Metric'
-import { PanelHeader } from './PanelHeader'
-import { StatusChart } from './StatusChart'
+import type { DashboardData, NextAction, TaskGroup, TaskItem } from './dashboardData'
+import { summarySentence } from './dashboardData'
+import type { SetupStep } from './onboardingSteps'
+import { DashboardGreeting } from './DashboardGreeting'
+import { GettingStarted } from './GettingStarted'
+import { KpiGrid } from './KpiGrid'
+import { NextStrip } from './NextStrip'
+import { SchedulePanel } from './SchedulePanel'
+import { SetupCard } from './SetupCard'
+import { StatusPipeline } from './StatusPipeline'
+import { TasksPanel } from './TasksPanel'
 
-export function Dashboard({ applications, navigate }: { applications: Application[]; navigate: (s: string) => void }) {
-  const apps = applications.filter(a => !a.deletedAt)
-  const now = new Date()
-  const nextWeek = new Date(now.getTime() + 7 * 864e5)
-  const interviews = apps.flatMap(a => a.interviews.filter(i => !i.cancelledAt && new Date(i.startsAt) >= now && new Date(i.startsAt) <= nextWeek).map(i => ({ ...i, app: a }))).sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-  const tasks = apps.flatMap(a => a.tasks.filter(t => !t.completedAt && t.dueAt && new Date(t.dueAt) <= nextWeek).map(t => ({ ...t, app: a }))).sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''))
+type DashboardProps = {
+  data: DashboardData
+  now: Date
+  nextActions: NextAction[]
+  taskGroups: TaskGroup[]
+  setupSteps: SetupStep[]
+  showSetupCard: boolean
+  onDismissSetup: () => void
+  onCompleteTask: (item: TaskItem) => void
+}
+
+/** Order: greeting → next strip → KPI tiles → [tasks | schedule] → pipeline. A brand-new user gets the welcome checklist instead. */
+export function Dashboard({ data, now, nextActions, taskGroups, setupSteps, showSetupCard, onDismissSetup, onCompleteTask }: DashboardProps) {
+  const firstRun = data.apps.length === 0
   return <div className="page dashboard-page">
-    <PageHeader title="Tổng quan" />
-    <section className="dashboard-overview" aria-label="Tổng quan ứng tuyển">
-      <StatusChart applications={apps} navigate={navigate} />
-      <div className="priority-metrics">
-        <Metric label="Cần xử lý" value={tasks.length} onClick={() => navigate(`/calendar?view=week&date=${calendarDateKey(now)}`)} />
-        <Metric label="Phỏng vấn" value={apps.filter(a => a.status === 'INTERVIEW').length} onClick={() => navigate('/applications?status=INTERVIEW')} />
+    <DashboardGreeting now={now} summary={firstRun ? undefined : summarySentence(data)} />
+    {firstRun ? <GettingStarted steps={setupSteps} /> : <>
+      <NextStrip actions={nextActions} />
+      <KpiGrid data={data} now={now} />
+      {showSetupCard && <SetupCard steps={setupSteps} onDismiss={onDismissSetup} />}
+      <div className="dashboard-grid">
+        <TasksPanel groups={taskGroups} undatedCount={data.undatedTaskCount} hasApplications={data.apps.length > 0} calendarHref={data.calendarHref} onComplete={onCompleteTask} />
+        <SchedulePanel interviews={data.interviews} now={now} calendarHref={data.calendarHref} />
       </div>
-    </section>
-    <div className="dashboard-grid">
-      <section className="panel schedule-panel">
-        <PanelHeader title="Lịch sắp tới" action="Xem tất cả" onAction={() => navigate('/applications?status=INTERVIEW')} />
-        {interviews.length ? interviews.map(item => <button key={item.id} className="schedule-item" onClick={() => navigate(`/applications/${item.app.id}`)}>
-          <span className="schedule-date"><CalendarDays size={18} /><strong>{formatDate(item.startsAt)}</strong></span>
-          <span className="schedule-copy"><strong>{item.title}</strong><small>{item.app.companyName}</small></span>
-          <time>{formatTime(item.startsAt)} – {formatTime(item.endsAt)}</time>
-          <ChevronRight size={19} />
-        </button>) : <EmptyMini icon={<CalendarDays />} text="Chưa có lịch phỏng vấn trong 7 ngày tới." />}
-      </section>
-      <section className="panel task-panel">
-        <PanelHeader title="Việc cần làm" action="Đến danh sách" onAction={() => navigate('/applications')} />
-        {tasks.length ? tasks.map(item => {
-          const overdue = new Date(item.dueAt!) < now
-          return <button key={item.id} className="task-row" onClick={() => navigate(`/applications/${item.app.id}`)}>
-            <span className={`task-check ${overdue ? 'overdue' : ''}`} />
-            <span><strong>{item.title}</strong><small>{item.app.companyName}</small></span>
-            <em className={overdue ? 'danger-text' : ''}>{overdue ? 'Quá hạn' : formatDateTime(item.dueAt)}</em>
-          </button>
-        }) : <EmptyMini icon={<CheckCircle2 />} text="Tuyệt! Không có việc nào sắp đến hạn." />}
-      </section>
-    </div>
+      <StatusPipeline counts={data.statusCounts} total={data.apps.length} />
+    </>}
   </div>
 }

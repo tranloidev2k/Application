@@ -12,5 +12,5 @@
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
   }
-  .primary:hover, .metric-card:hover, .status-donut:hover { transform: none; }
+  .primary:hover { transform: none; }
 }

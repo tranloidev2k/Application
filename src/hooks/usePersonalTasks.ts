@@ -6,7 +6,8 @@ import { ensureAnonymousSession } from '../lib/supabase'
 import { PersonalTask } from '../types'
 import type { ToastFn } from '../context/AppDataContext'
 
-export function usePersonalTasks(toast: ToastFn) {
+/** Personal calendar tasks. `silentLoadError` logs a failed load instead of toasting it (for pages where these tasks are secondary). */
+export function usePersonalTasks(toast: ToastFn, silentLoadError = false) {
   const [tasks, setTasks] = useState<PersonalTask[]>([])
   const latest = useRef(tasks)
   useEffect(() => { latest.current = tasks }, [tasks])
@@ -17,10 +18,10 @@ export function usePersonalTasks(toast: ToastFn) {
       .then(remote => { if (active) setTasks(remote) })
       .catch(error => {
         console.error('Loading personal tasks failed', error)
-        if (active) toast('Không tải được công việc cá nhân từ database', { tone: 'error' })
+        if (active && !silentLoadError) toast('Không tải được công việc cá nhân từ database', { tone: 'error' })
       })
     return () => { active = false }
-  }, [toast])
+  }, [toast, silentLoadError])
 
   // Shows the change immediately and rolls it back if the database rejects it.
   const change = useCallback(async (next: PersonalTask[], request: () => Promise<void>, success: string) => {

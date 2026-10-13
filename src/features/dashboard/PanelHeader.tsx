@@ -1,7 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
-export function PanelHeader({ title, action, onAction }: { title: string; action: string; onAction: () => void }) {
-  return <div className="panel-head"><h2>{title}</h2><button className="text-button" onClick={onAction}>{action}<ArrowRight size={16} /></button></div>
+export function PanelHeader({ id, title, action, href }: { id: string; title: string; action: string; href: string }) {
+  return <div className="panel-head">
+    <h2 id={id}>{title}</h2>
+    <Link className="text-button" href={href}>{action}<ArrowRight size={16} aria-hidden="true" /></Link>
+  </div>
 }

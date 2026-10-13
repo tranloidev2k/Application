@@ -16,10 +16,6 @@ export function applyStatusChange(app: Application, status: Status, appliedAt?: 
   }
 }
 
-export const STATUS_CHART_COLORS: Record<Status, string> = {
-  SAVED: 'var(--status-saved-fg)', APPLIED: 'var(--status-applied-fg)', SCREENING: 'var(--status-screening-fg)', INTERVIEW: 'var(--status-interview-fg)', OFFER: 'var(--status-offer-fg)', REJECTED: 'var(--status-rejected-fg)', WITHDRAWN: 'var(--status-withdrawn-fg)',
-}
-
 /** Spec F07 "đơn đang hoạt động". SAVED is not sent yet; OFFER, REJECTED and WITHDRAWN are terminal. */
 export const ACTIVE_STATUSES: Status[] = ['APPLIED', 'SCREENING', 'INTERVIEW']
 export const isActiveApplication = (app: Application) => !app.deletedAt && ACTIVE_STATUSES.includes(app.status)
