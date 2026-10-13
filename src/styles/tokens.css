@@ -50,6 +50,7 @@
   --event-task-fg: #166534;       --event-task-bg: #dcfce7;       --event-task-line: #16a34a;
   --event-interview-fg: #6d28d9;  --event-interview-bg: #ede9fe;  --event-interview-line: #7c3aed;
   --event-personal-fg: #1f4a73;   --event-personal-bg: #e3eefa;   --event-personal-line: #3f78b5;
+  --event-deadline-fg: #92400e;   --event-deadline-bg: #fef3c7;   --event-deadline-line: #d97706;
 
   /* Radius */
   --r-sm: 6px;
