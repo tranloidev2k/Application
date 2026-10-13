@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CalendarEvent, EventDraft } from "../types/event";
 import * as api from "../api/events";
 
@@ -9,6 +9,11 @@ export function useCalendarEvents() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const latest = useRef(events);
+
+  useEffect(() => {
+    latest.current = events;
+  }, [events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,25 +39,29 @@ export function useCalendarEvents() {
   const resync = useCallback(async () => {
     try {
       setEvents(await api.fetchEvents());
+      return true;
     } catch {
       // The original error is already shown.
+      return false;
     }
   }, []);
 
-  // Applies the change locally first, then restores server state if the
-  // request fails so the calendar never shows data that was not saved.
+  // Applies the change locally first, then restores server state (or the
+  // previous local state when the server is unreachable) if the request
+  // fails, so the calendar never shows data that was not saved.
   const optimistic = useCallback(
     async (
       apply: (items: CalendarEvent[]) => CalendarEvent[],
       persist: () => Promise<unknown>,
     ) => {
+      const previous = latest.current;
       setEvents(apply);
       try {
         await persist();
         setError(null);
       } catch (e) {
         setError(errorMessage(e));
-        await resync();
+        if (!(await resync())) setEvents(previous);
       }
     },
     [resync],

@@ -1,7 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventDraft } from "../../../src/types/event";
 import { useCalendarEvents } from "../../../src/hooks/useCalendarEvents";
+import { createFakeSupabase } from "../fakeSupabase";
+
+type FakeSupabase = ReturnType<typeof createFakeSupabase>;
 
 const draft = (title = "Planning"): EventDraft => ({
   title,
@@ -11,55 +14,34 @@ const draft = (title = "Planning"): EventDraft => ({
   end: new Date(2026, 8, 8, 10),
 });
 
-const json = (body: unknown, status = 200) =>
-  new Response(body === undefined ? null : JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+const fake = vi.hoisted(() => ({ current: null as FakeSupabase | null }));
+const ensureSession = vi.hoisted(() => vi.fn(async () => {}));
 
-// Minimal in-memory stand-in for the REST API.
+vi.mock("../../../src/lib/supabase", () => ({
+  ensureSession,
+  getSupabase: () => fake.current?.client,
+}));
+
 function mockServer() {
-  const rows = new Map<string, Record<string, unknown>>();
-  let nextId = 1;
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    const method = init?.method ?? "GET";
-    const id = url.split("/api/events/")[1];
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-    if (method === "GET") return json([...rows.values()]);
-    if (method === "POST") {
-      const row = { ...body, id: String(nextId++) };
-      rows.set(row.id, row);
-      return json(row, 201);
-    }
-    if (!rows.has(id)) return json({ error: "Event not found." }, 404);
-    if (method === "PUT") {
-      rows.set(id, { ...body, id });
-      return json(rows.get(id));
-    }
-    rows.delete(id);
-    return new Response(null, { status: 204 });
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  return { rows, fetchMock };
+  fake.current = createFakeSupabase();
+  return fake.current;
 }
 
 describe("useCalendarEvents", () => {
   beforeEach(() => {
-    vi.unstubAllGlobals();
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    ensureSession.mockReset();
+    ensureSession.mockResolvedValue(undefined);
   });
 
-  it("loads events from the API on mount", async () => {
+  it("loads events from Supabase on mount", async () => {
     const { rows } = mockServer();
     rows.set("a", {
       id: "a",
       title: "Stored",
       description: "",
       category: "study",
-      start: new Date(2026, 8, 8, 9).toISOString(),
-      end: new Date(2026, 8, 8, 10).toISOString(),
+      start_at: new Date(2026, 8, 8, 9).toISOString(),
+      end_at: new Date(2026, 8, 8, 10).toISOString(),
     });
 
     const { result } = renderHook(() => useCalendarEvents());
@@ -75,7 +57,7 @@ describe("useCalendarEvents", () => {
     });
   });
 
-  it("creates, updates, moves, and removes events through the API", async () => {
+  it("creates, updates, moves, and removes events through Supabase", async () => {
     const { rows } = mockServer();
     const { result } = renderHook(() => useCalendarEvents());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -101,7 +83,7 @@ describe("useCalendarEvents", () => {
       start,
       end,
     });
-    expect(rows.get(created.id)?.start).toBe(start.toISOString());
+    expect(rows.get(created.id)?.start_at).toBe(start.toISOString());
 
     await act(() => result.current.remove(created.id));
     expect(result.current.events).toEqual([]);
@@ -124,13 +106,9 @@ describe("useCalendarEvents", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("reports an error when the API is unreachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("Network down");
-      }),
-    );
+  it("reports an error when Supabase is unreachable", async () => {
+    mockServer();
+    ensureSession.mockRejectedValue(new Error("Network down"));
     const { result } = renderHook(() => useCalendarEvents());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe("Network down");
@@ -141,10 +119,26 @@ describe("useCalendarEvents", () => {
   });
 
   it("ignores moves for unknown events", async () => {
-    const { fetchMock } = mockServer();
+    mockServer();
     const { result } = renderHook(() => useCalendarEvents());
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(() => result.current.move("missing", new Date(), new Date()));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ensureSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports database errors", async () => {
+    const server = mockServer();
+    const { result } = renderHook(() => useCalendarEvents());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.create(draft()));
+
+    server.fail("permission denied");
+    await act(() => result.current.remove(result.current.events[0].id));
+    expect(result.current.error).toBe("permission denied");
+    expect(server.rows.size).toBe(1);
+
+    await act(() => result.current.create(draft("Second")));
+    expect(result.current.events).toHaveLength(1);
+    expect(result.current.error).toBe("permission denied");
   });
 });

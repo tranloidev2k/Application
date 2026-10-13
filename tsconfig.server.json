@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "lib": ["ES2022"],
-    "types": ["node"]
-  },
-  "include": ["server", "tests/unit/server"],
-  "exclude": []
-}

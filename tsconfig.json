@@ -16,6 +16,5 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "tests"],
-  "exclude": ["tests/unit/server"]
+  "include": ["src", "tests"]
 }

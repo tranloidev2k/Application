@@ -5,8 +5,9 @@ A weekly time-blocking calendar built with React, TypeScript, Vite, and Tailwind
 ## Features
 
 - Shows seven consecutive days beginning today.
-- Tasks are stored in a SQLite database through a small REST API, so they
-  survive page reloads.
+- Tasks are stored in Supabase (Postgres). Each browser signs in as an
+  anonymous Supabase user, and row level security keeps every user's tasks
+  private.
 - Each task has a category (Work, Meeting, Study, Personal, Other) shown as a
   color on the calendar.
 - Hour-based calendar grid with 15-minute snapping.
@@ -21,8 +22,9 @@ A weekly time-blocking calendar built with React, TypeScript, Vite, and Tailwind
 
 ## Requirements
 
-- Node.js 22.5 or newer (uses the built-in `node:sqlite` module)
+- Node.js 20 or newer
 - npm
+- A Supabase project
 
 ## Getting started
 
@@ -32,17 +34,21 @@ Install dependencies:
 npm install
 ```
 
-Start the API server (stores data in `data/calendar.db`) and, in a second
-terminal, the Vite development server:
+### Set up Supabase
+
+1. Open the Supabase dashboard, go to **SQL Editor**, and run
+   `supabase/migrations/20261013000000_calendar_events.sql`. It creates the
+   `calendar_events` table and its row level security policies.
+2. Go to **Authentication → Sign In / Providers** and turn on
+   **Allow anonymous sign-ins**.
+3. Copy `.env.example` to `.env.local` and fill in the project URL and the
+   publishable (anon) key from **Project Settings → API Keys**.
+
+Start the development server:
 
 ```bash
-npm run server
 npm run dev
 ```
-
-Vite proxies `/api` requests to `http://localhost:3001`. Set `PORT` to change
-the API port, `DB_PATH` to change the database file, and `API_URL` to point
-Vite at another API address.
 
 Build the production bundle:
 
@@ -55,8 +61,6 @@ npm run build
 | Command                 | Description                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `npm run dev`           | Starts the Vite development server.                                           |
-| `npm run server`        | Starts the API server in watch mode.                                          |
-| `npm run server:start`  | Starts the API server without watch mode.                                     |
 | `npm run build`         | Type-checks and builds the production bundle.                                 |
 | `npm run preview`       | Serves the production build locally.                                          |
 | `npm run lint`          | Runs ESLint.                                                                  |
@@ -66,7 +70,7 @@ npm run build
 | `npm run cypress:open`  | Opens the Cypress desktop runner.                                             |
 | `npm run cypress:run`   | Runs Cypress E2E tests against an available dev server.                       |
 | `npm run typecheck:e2e` | Type-checks Cypress configuration and E2E specs.                              |
-| `npm run test:e2e`      | Starts the API (in-memory DB) and Vite, then runs the Cypress E2E suite.      |
+| `npm run test:e2e`      | Starts Vite and runs the Cypress E2E suite against the configured Supabase.   |
 | `npm run format`        | Formats supported project files with Prettier.                                |
 | `npm run format:check`  | Checks formatting without modifying files.                                    |
 
@@ -78,25 +82,17 @@ npm run build
 - Right-click an event to open the Edit/Delete menu.
 - Use Add event in the header to create a one-hour event at the next 15-minute interval.
 
-## REST API
+## Deploying to Vercel
 
-| Method   | Path              | Description                |
-| -------- | ----------------- | -------------------------- |
-| `GET`    | `/api/events`     | Lists all events by start. |
-| `POST`   | `/api/events`     | Creates an event.          |
-| `GET`    | `/api/events/:id` | Returns one event.         |
-| `PUT`    | `/api/events/:id` | Replaces an event.         |
-| `DELETE` | `/api/events/:id` | Deletes an event.          |
-| `GET`    | `/api/health`     | Health check.              |
-
-Event bodies use `title`, `description`, `category`
-(`work`, `meeting`, `study`, `personal` or `other`) and ISO `start`/`end`
-timestamps. Invalid input returns `400` with `{ "error": "..." }`.
+`vercel.json` builds the app as a static Vite site. In the Vercel project,
+add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` under
+**Settings → Environment Variables**, then redeploy.
 
 ## Testing
 
 Unit tests cover the date/time helpers, event layout, event state and API
-syncing, drag-to-create, drag-to-move, Escape-key behavior, and the REST API. They are located in `tests/unit/`.
+syncing, drag-to-create, drag-to-move, Escape-key behavior, and the Supabase
+session helper. Supabase is replaced with an in-memory fake. They are located in `tests/unit/`.
 
 Coverage applies to the core hooks and utilities, with the following required
 minimums:
@@ -111,15 +107,17 @@ minimums:
 ## Project structure
 
 ```text
-server/        # REST API and SQLite event store
+supabase/
+  migrations/  # SQL for the calendar_events table and its policies
 src/
-  api/         # Fetch client for the REST API
+  api/         # Event queries against Supabase
   components/
     calendar/  # Calendar shell, grid, header, day columns, and time axis
     dialogs/   # Create, edit, detail, and delete-confirmation dialogs
     event/     # Event blocks and their context menu
   constants.ts # Shared calendar configuration
   hooks/       # Event state and drag interactions
+  lib/         # Supabase client and anonymous session
   types/       # Shared TypeScript models
   utils/       # Date/time and event layout helpers
 tests/
