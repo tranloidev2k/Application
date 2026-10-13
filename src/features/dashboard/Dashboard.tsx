@@ -1,6 +1,6 @@
 'use client'
 
-import { CalendarDays, CheckCircle2, ChevronRight, Plus } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronRight } from 'lucide-react'
 import { Application } from '../../types'
 import { calendarDateKey, formatDate, formatDateTime, formatTime } from '../../utils/date'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -16,7 +16,7 @@ export function Dashboard({ applications, navigate }: { applications: Applicatio
   const interviews = apps.flatMap(a => a.interviews.filter(i => !i.cancelledAt && new Date(i.startsAt) >= now && new Date(i.startsAt) <= nextWeek).map(i => ({ ...i, app: a }))).sort((a, b) => a.startsAt.localeCompare(b.startsAt))
   const tasks = apps.flatMap(a => a.tasks.filter(t => !t.completedAt && t.dueAt && new Date(t.dueAt) <= nextWeek).map(t => ({ ...t, app: a }))).sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''))
   return <div className="page dashboard-page">
-    <PageHeader title="Tổng quan" action={<button className="primary" onClick={() => navigate('/applications/new')}><Plus size={18} /> Thêm đơn ứng tuyển</button>} />
+    <PageHeader title="Tổng quan" />
     <section className="dashboard-overview" aria-label="Tổng quan ứng tuyển">
       <StatusChart applications={apps} navigate={navigate} />
       <div className="priority-metrics">

@@ -2,7 +2,6 @@
 
 import { ReactNode, useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { useNavigate } from '../../hooks/useNavigate'
 import { routeFromPathname } from '../../utils/routes'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
@@ -10,9 +9,7 @@ import { Topbar } from './Topbar'
 const SIDEBAR_STORAGE_KEY = 'trackly-sidebar-collapsed'
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname()
-  const navigate = useNavigate()
-  const route = routeFromPathname(pathname)
+  const route = routeFromPathname(usePathname())
   const [mobileNav, setMobileNav] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -24,9 +21,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <Sidebar route={route} navigate={navigate} open={mobileNav} close={() => setMobileNav(false)} collapsed={sidebarCollapsed} toggleCollapsed={() => setSidebarCollapsed(value => !value)} />
+      <Sidebar route={route} open={mobileNav} close={() => setMobileNav(false)} collapsed={sidebarCollapsed} toggleCollapsed={() => setSidebarCollapsed(value => !value)} />
       <div className={`app-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        <Topbar onMenu={() => setMobileNav(true)} navigate={navigate} />
+        <Topbar route={route} onMenu={() => setMobileNav(true)} />
         <main>{children}</main>
       </div>
     </div>

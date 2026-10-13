@@ -1,21 +1,30 @@
 'use client'
 
 import { BriefcaseBusiness, CalendarDays, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings, X } from 'lucide-react'
+import { useAppData } from '../../context/AppDataContext'
 import type { Route } from '../../utils/routes'
+import { isActiveApplication } from '../../utils/status'
+import { countOverdueTasks } from '../../utils/tasks'
 import { Logo } from './Logo'
+import { NavBadge, NavItem } from './NavItem'
 
-export function Sidebar({ route, navigate, open, close, collapsed, toggleCollapsed }: { route: Route; navigate: (s: string) => void; open: boolean; close: () => void; collapsed: boolean; toggleCollapsed: () => void }) {
+export function Sidebar({ route, open, close, collapsed, toggleCollapsed }: { route: Route; open: boolean; close: () => void; collapsed: boolean; toggleCollapsed: () => void }) {
+  const { applications, ready } = useAppData()
+  // Counts come from the local cache and the clock, so they only render on the client once `ready` (never during SSR).
+  const activeCount = ready ? applications.filter(isActiveApplication).length : 0
+  const overdueCount = ready ? countOverdueTasks(applications, new Date()) : 0
+  const activeBadge: NavBadge | undefined = activeCount ? { count: activeCount, label: 'đơn đang hoạt động' } : undefined
+  const overdueBadge: NavBadge | undefined = overdueCount ? { count: overdueCount, label: 'việc quá hạn', tone: 'danger' } : undefined
   const items = [
-    { label: 'Tổng quan', icon: LayoutDashboard, path: '/', active: route.page === 'dashboard' },
-    { label: 'Đơn ứng tuyển', icon: BriefcaseBusiness, path: '/applications', active: ['applications', 'detail', 'edit'].includes(route.page) },
-    { label: 'Lịch công việc', icon: CalendarDays, path: '/calendar', active: route.page === 'calendar' },
+    { label: 'Tổng quan', icon: LayoutDashboard, href: '/', active: route.page === 'dashboard' },
+    { label: 'Đơn ứng tuyển', icon: BriefcaseBusiness, href: '/applications', active: ['applications', 'detail', 'edit', 'new'].includes(route.page), badge: activeBadge },
+    { label: 'Lịch công việc', icon: CalendarDays, href: '/calendar', active: route.page === 'calendar', badge: overdueBadge },
   ]
-  const go = (path: string) => { navigate(path); close() }
   return <>
-    {open && <button className="nav-scrim" onClick={close} aria-label="Đóng menu" />}
+    {open && <button type="button" className="nav-scrim" onClick={close} aria-label="Đóng menu" />}
     <aside className={`sidebar ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-head">
-        <Logo />
+        <Logo onNavigate={close} />
         <button
           type="button"
           className="sidebar-collapse-button desktop-only"
@@ -26,13 +35,13 @@ export function Sidebar({ route, navigate, open, close, collapsed, toggleCollaps
         >
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
-        <button className="icon-button mobile-only" onClick={close}><X size={20} /></button>
+        <button type="button" className="icon-button mobile-only" onClick={close} aria-label="Đóng menu"><X size={20} /></button>
       </div>
       <nav aria-label="Điều hướng chính">
-        {items.map(item => <button key={item.path} className={`nav-item ${item.active ? 'active' : ''}`} onClick={() => go(item.path)} title={collapsed ? item.label : undefined}><item.icon size={19} /><span>{item.label}</span></button>)}
+        {items.map(item => <NavItem key={item.href} {...item} collapsed={collapsed} onNavigate={close} />)}
       </nav>
       <div className="sidebar-grow" />
-      <button className={`nav-item ${route.page === 'account' ? 'active' : ''}`} onClick={() => go('/account')} title={collapsed ? 'Tài khoản' : undefined}><Settings size={19} /><span>Tài khoản</span></button>
+      <NavItem href="/account" label="Tài khoản" icon={Settings} active={route.page === 'account'} collapsed={collapsed} onNavigate={close} />
     </aside>
   </>
 }

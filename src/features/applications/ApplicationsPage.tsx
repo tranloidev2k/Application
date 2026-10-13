@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Filter, ListTodo, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Filter, ListTodo, Pencil, Search, Trash2, X } from 'lucide-react'
 import { Application, STATUSES, STATUS_META } from '../../types'
 import { formatDate, formatDateTime } from '../../utils/date'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -40,7 +40,7 @@ export function ApplicationsPage({ applications, navigate, onDelete }: { applica
   const clear = () => { setQuery(''); setStatus(''); setSource(''); setSort('updated'); setPage(1) }
 
   return <div className="page applications-page">
-    <PageHeader title="Đơn ứng tuyển" action={<button className="primary" onClick={() => navigate('/applications/new')}><Plus size={18} /> Thêm đơn mới</button>} />
+    <PageHeader title="Đơn ứng tuyển" />
     <div className="filter-bar">
       <label className="search-box"><Search size={18} /><input aria-label="Tìm kiếm" placeholder="Tìm công ty hoặc vị trí..." value={query} onChange={e => { setQuery(e.target.value); setPage(1) }} /></label>
       <label className="select-control"><Filter size={17} /><select aria-label="Lọc trạng thái" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="">Mọi trạng thái</option>{STATUSES.map(s => <option key={s} value={s}>{STATUS_META[s].label}</option>)}</select><ChevronDown size={15} /></label>

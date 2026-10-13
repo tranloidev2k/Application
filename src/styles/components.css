@@ -193,10 +193,17 @@ button.chip:hover { border-color: var(--border-input); color: var(--text); }
 .chip.active, .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .count-pill { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--r-pill); background: var(--bg); color: var(--text-muted); font-size: var(--fs-xs); font-weight: 600; line-height: 1; }
 .chip.active .count-pill, .chip[aria-pressed="true"] .count-pill { background: var(--surface); color: var(--accent); }
+.count-pill.danger { background: var(--danger); color: var(--on-ink); }
 
 /* -- Sync / demo chip -- */
 .demo-chip { padding: 7px 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-pill); background: var(--warning-soft); color: var(--warning); font-size: var(--fs-xs); font-weight: 500; white-space: nowrap; }
 .demo-chip.connected { background: var(--success-soft); color: var(--success); }
+/* Topbar sync status: a link to the account page. States: .connecting (neutral), .connected (green), .offline (amber). */
+.sync-chip { min-height: 32px; border: 1px solid transparent; text-decoration: none; transition: border-color .15s ease; }
+.sync-chip:hover { border-color: color-mix(in srgb, currentColor 40%, transparent); }
+.sync-chip.connecting { background: var(--bg); color: var(--text-muted); }
+.sync-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
+.spin { animation: spin 1s linear infinite; }
 
 /* -- Skeleton -- */
 .skeleton { display: block; min-height: 12px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--bg) 25%, var(--line) 37%, var(--bg) 63%); background-size: 400% 100%; color: transparent; animation: shimmer 1.4s ease infinite; }

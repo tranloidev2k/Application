@@ -87,14 +87,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Supabase connection failed', error)
         if (!active) return
+        // No toast: the topbar sync chip shows the offline state.
         setSyncState('offline')
-        toast('Chưa kết nối được database — dữ liệu vẫn được lưu trên thiết bị', { tone: 'info' })
       }
     }
 
     void connectDatabase()
     return () => { active = false }
-  }, [toast])
+  }, [])
   useEffect(() => {
     const pending = Object.values(pendingApplications)
     if (!databaseUserId || !pending.length) return
