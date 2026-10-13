@@ -9,6 +9,7 @@ import { StatusBadge } from './StatusBadge'
 
 const ITEM_HEIGHT = 36
 const MENU_CHROME = 14 // padding and border around the items
+const SEPARATOR_HEIGHT = 9
 const MENU_WIDTH = 210
 const GAP = 4
 const EDGE = 8
@@ -19,8 +20,8 @@ type MenuPosition = { left: number; top?: number; bottom?: number }
  * Below the trigger when the menu fits there (or there is more room below), otherwise above it, kept inside the viewport.
  * `end` lines the menu's right edge up with the trigger's (for a small trigger at the right of a card).
  */
-function menuPosition(trigger: DOMRect, itemCount: number, align: 'start' | 'end'): MenuPosition {
-  const height = itemCount * ITEM_HEIGHT + MENU_CHROME
+function menuPosition(trigger: DOMRect, itemCount: number, align: 'start' | 'end', extraHeight = 0): MenuPosition {
+  const height = itemCount * ITEM_HEIGHT + MENU_CHROME + extraHeight
   const preferred = align === 'end' ? trigger.right - MENU_WIDTH : trigger.left
   const left = Math.max(EDGE, Math.min(preferred, window.innerWidth - MENU_WIDTH - EDGE))
   const below = window.innerHeight - trigger.bottom - GAP - EDGE
@@ -35,16 +36,20 @@ function menuPosition(trigger: DOMRect, itemCount: number, align: 'start' | 'end
  * dismisses the menu: it does not also activate a non-interactive parent such as a row.
  * The menu is portalled to <body>, so a scrolling or draggable ancestor (a board column or card) never clips or drags it.
  * The `icon` variant is a small chevron button named 'Đổi trạng thái {contextLabel}', for places where the status is
- * already shown (a board column).
+ * already shown (a board column). The `button` variant is a secondary button showing `label` (the detail page's 'Đóng đơn').
+ * `extraAction` adds one plain item after the statuses, behind a separator (e.g. 'Chọn trạng thái khác…').
  */
-export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel, variant = 'badge' }: {
+export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel, variant = 'badge', label, extraAction }: {
   status: Status
   onSelect: (status: Status) => void
   /** Limits the choices; defaults to every status. */
   statuses?: Status[]
   /** Appended to the trigger's accessible name, e.g. the job title, so many triggers on one page stay distinguishable. */
   contextLabel?: string
-  variant?: 'badge' | 'icon'
+  variant?: 'badge' | 'icon' | 'button'
+  /** The visible text of the `button` variant. */
+  label?: string
+  extraAction?: { label: string; onSelect: () => void }
 }) {
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -95,7 +100,12 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
     }
   }, [open])
 
-  const openMenu = (trigger: HTMLElement) => setPosition(menuPosition(trigger.getBoundingClientRect(), statuses.length, variant === 'icon' ? 'end' : 'start'))
+  const openMenu = (trigger: HTMLElement) => setPosition(menuPosition(
+    trigger.getBoundingClientRect(),
+    statuses.length + (extraAction ? 1 : 0),
+    variant === 'badge' ? 'start' : 'end',
+    extraAction ? SEPARATOR_HEIGHT : 0,
+  ))
 
   const onTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -111,7 +121,7 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
   }
 
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemradio"]'))
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]'))
     const index = items.indexOf(document.activeElement as HTMLElement)
     let next: number
     switch (event.key) {
@@ -145,7 +155,7 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
     <button
       ref={triggerRef}
       type="button"
-      className={variant === 'icon' ? 'status-trigger-icon' : 'status-trigger'}
+      className={variant === 'icon' ? 'status-trigger-icon' : variant === 'button' ? 'secondary compact status-trigger-button' : 'status-trigger'}
       aria-haspopup="menu"
       aria-expanded={open}
       aria-controls={open ? menuId : undefined}
@@ -154,7 +164,10 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
       onClick={onTriggerClick}
       onKeyDown={onTriggerKeyDown}
     >
-      {variant === 'icon' ? <ChevronDown size={16} aria-hidden="true" /> : <>
+      {variant === 'icon' ? <ChevronDown size={16} aria-hidden="true" /> : variant === 'button' ? <>
+        {label}
+        <ChevronDown size={16} aria-hidden="true" />
+      </> : <>
         <StatusBadge status={status} />
         <span className="sr-only">, đổi trạng thái{contextLabel ? ` đơn ${contextLabel}` : ''}</span>
         <ChevronDown className="status-trigger-chevron" size={15} aria-hidden="true" />
@@ -179,6 +192,12 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
           {checked && <Check className="menu-item-check" size={16} aria-hidden="true" />}
         </button>
       })}
+      {extraAction && <>
+        <div className="menu-separator" role="separator" />
+        <button type="button" role="menuitem" tabIndex={-1} className="menu-item" onClick={() => { close(true); extraAction.onSelect() }}>
+          <span className="menu-item-label">{extraAction.label}</span>
+        </button>
+      </>}
     </div>, document.body)}
   </>
 }

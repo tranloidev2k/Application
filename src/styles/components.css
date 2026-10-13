@@ -46,6 +46,19 @@ a.text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
 .input-icon { position: relative; }
 .input-icon > svg { position: absolute; left: 11px; top: 12px; color: var(--text-subtle); }
 .input-icon input { padding-left: 36px; }
+.check-field {
+  min-height: 46px; padding: 0 12px;
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle);
+  color: var(--text); font-size: var(--fs-base); font-weight: 500; cursor: pointer;
+}
+.check-field.wide { grid-column: 1 / -1; }
+.check-field input { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--ink); cursor: pointer; }
+
+/* -- Clamped text with 'Xem thêm' -- */
+.clamp-text p.clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--clamp-lines, 6); line-clamp: var(--clamp-lines, 6); overflow: hidden; }
+.show-more { margin-top: 6px; padding: 4px 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.show-more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* -- Search and select -- */
 .search-box, .select-control {
@@ -62,13 +75,13 @@ a.text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
 .select-control > svg:last-child { position: absolute; right: 9px; pointer-events: none; }
 
 /* -- Status: badge, choice, dot, filter tab (tones come from STATUS_META) -- */
-.status-badge.slate, .status-choice.slate, .status-dot.slate, .status-tab.slate { --tone-fg: var(--status-saved-fg); --tone-bg: var(--status-saved-bg); --tone-border: var(--status-saved-border); }
-.status-badge.blue, .status-choice.blue, .status-dot.blue, .status-tab.blue { --tone-fg: var(--status-applied-fg); --tone-bg: var(--status-applied-bg); --tone-border: var(--status-applied-border); }
-.status-badge.amber, .status-choice.amber, .status-dot.amber, .status-tab.amber { --tone-fg: var(--status-screening-fg); --tone-bg: var(--status-screening-bg); --tone-border: var(--status-screening-border); }
-.status-badge.violet, .status-choice.violet, .status-dot.violet, .status-tab.violet { --tone-fg: var(--status-interview-fg); --tone-bg: var(--status-interview-bg); --tone-border: var(--status-interview-border); }
-.status-badge.green, .status-choice.green, .status-dot.green, .status-tab.green { --tone-fg: var(--status-offer-fg); --tone-bg: var(--status-offer-bg); --tone-border: var(--status-offer-border); }
-.status-badge.red, .status-choice.red, .status-dot.red, .status-tab.red { --tone-fg: var(--status-rejected-fg); --tone-bg: var(--status-rejected-bg); --tone-border: var(--status-rejected-border); }
-.status-badge.gray, .status-choice.gray, .status-dot.gray, .status-tab.gray { --tone-fg: var(--status-withdrawn-fg); --tone-bg: var(--status-withdrawn-bg); --tone-border: var(--status-withdrawn-border); }
+.status-badge.slate, .status-choice.slate, .status-dot.slate, .status-tab.slate, .stage.slate { --tone-fg: var(--status-saved-fg); --tone-bg: var(--status-saved-bg); --tone-border: var(--status-saved-border); }
+.status-badge.blue, .status-choice.blue, .status-dot.blue, .status-tab.blue, .stage.blue { --tone-fg: var(--status-applied-fg); --tone-bg: var(--status-applied-bg); --tone-border: var(--status-applied-border); }
+.status-badge.amber, .status-choice.amber, .status-dot.amber, .status-tab.amber, .stage.amber { --tone-fg: var(--status-screening-fg); --tone-bg: var(--status-screening-bg); --tone-border: var(--status-screening-border); }
+.status-badge.violet, .status-choice.violet, .status-dot.violet, .status-tab.violet, .stage.violet { --tone-fg: var(--status-interview-fg); --tone-bg: var(--status-interview-bg); --tone-border: var(--status-interview-border); }
+.status-badge.green, .status-choice.green, .status-dot.green, .status-tab.green, .stage.green { --tone-fg: var(--status-offer-fg); --tone-bg: var(--status-offer-bg); --tone-border: var(--status-offer-border); }
+.status-badge.red, .status-choice.red, .status-dot.red, .status-tab.red, .stage.red { --tone-fg: var(--status-rejected-fg); --tone-bg: var(--status-rejected-bg); --tone-border: var(--status-rejected-border); }
+.status-badge.gray, .status-choice.gray, .status-dot.gray, .status-tab.gray, .stage.gray { --tone-fg: var(--status-withdrawn-fg); --tone-bg: var(--status-withdrawn-bg); --tone-border: var(--status-withdrawn-border); }
 
 .status-badge {
   min-height: 30px; padding: 0 11px;
@@ -169,6 +182,7 @@ a.text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
 .menu-item:disabled { color: var(--text-subtle); cursor: not-allowed; }
 .menu-item.danger { color: var(--danger); }
 .menu-item.danger:hover { background: var(--danger-soft); }
+.menu-separator { height: 1px; margin: 4px 2px; background: var(--line); }
 
 /* -- Segmented control (.calendar-view-switch is the original instance) -- */
 .segmented, .calendar-view-switch { padding: 3px; display: inline-flex; border: 1px solid var(--line-strong); border-radius: 22px; background: var(--bg); }
@@ -209,16 +223,14 @@ button.chip:hover { border-color: var(--border-input); color: var(--text); }
 
 /* -- Skeleton -- */
 .skeleton { display: block; min-height: 12px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--bg) 25%, var(--line) 37%, var(--bg) 63%); background-size: 400% 100%; color: transparent; animation: shimmer 1.4s ease infinite; }
-/* Detail/edit loading page: mirrors .detail-hero, .info-grid and .tabs so the real page lands without a jump. */
+/* Detail/edit loading page: mirrors .detail-hero (with the stepper), .info-grid and .tabs so the real page lands without a jump. */
 /* Pieces that sit on the page background need a darker base than var(--bg) to be visible. */
 .detail-skeleton > .skeleton, .detail-skeleton .detail-hero .skeleton { background-image: linear-gradient(90deg, var(--line) 25%, var(--line-strong) 37%, var(--line) 63%); }
 .detail-skeleton .sk-back { width: 150px; height: 14px; margin-bottom: 26px; }
 .detail-skeleton .sk-eyebrow { width: 120px; height: 12px; margin-bottom: 10px; }
-.detail-skeleton .sk-title { width: min(420px, 70vw); height: 30px; margin-bottom: 12px; }
-.detail-skeleton .sk-badge { width: 96px; height: 30px; border-radius: 8px; }
+.detail-skeleton .sk-title { width: min(420px, 70vw); height: 32px; }
+.detail-skeleton .sk-stepper { flex: 1; height: 34px; }
 .detail-skeleton .sk-button { width: 120px; height: 42px; border-radius: 9px; }
-.detail-skeleton .info-item > .sk-icon { width: 31px; height: 31px; border-radius: 8px; }
-.detail-skeleton .info-item > div { flex: 1; }
 .detail-skeleton .sk-label { width: 64px; height: 11px; margin-bottom: 7px; }
 .detail-skeleton .sk-value { width: 70%; height: 15px; }
 .detail-skeleton .sk-tabs { align-items: center; }

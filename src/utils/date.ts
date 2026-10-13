@@ -10,6 +10,10 @@ export const calendarDateKey = (value: Date | string) => {
 export const todayKey = () => calendarDateKey(new Date())
 export const formatDate = (value?: string) => value ? dateFormatter.format(new Date(`${value.length === 10 ? `${value}T00:00:00` : value}`)) : '—'
 export const formatDateTime = (value?: string) => value ? dateTimeFormatter.format(new Date(value)) : '—'
+/** 'dd/MM/yyyy HH:mm' in local time, for tooltips next to a relative time. */
+export const formatFullDateTime = (value: string) => { const date = new Date(value); return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}` }
+/** A local Date as a datetime-local input value ('yyyy-MM-ddTHH:mm'). */
+export const toLocalInputValue = (date: Date) => `${calendarDateKey(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 export const toInputDateTime = (value?: string) => value ? new Date(new Date(value).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''
 
 // Relative date helpers. Callers pass `now` explicitly and only call these on the client after `ready`, never during SSR.

@@ -1,83 +1,117 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, CalendarDays, ChevronDown, Clock3, ExternalLink, FileText, Link2, Mail, MapPin, Pencil, Plus, Sparkles, Trash2, UserRound } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { Application, Interview, JobTask, Note, Status } from '../../types'
-import type { ToastFn } from '../../context/AppDataContext'
-import { formatDate } from '../../utils/date'
+import type { ToastFn, UpdateApplicationFn } from '../../context/AppDataContext'
+import { useNow } from '../../hooks/useNow'
 import { uid } from '../../utils/id'
+import { applyStatusChange } from '../../utils/status'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
-import { StatusBadge } from '../../components/ui/StatusBadge'
-import { Interviews } from './Interviews'
-import { Tasks } from './Tasks'
-import { Timeline } from './Timeline'
-import { InterviewModal } from './modals/InterviewModal'
+import { ContactCard } from './detail/ContactCard'
+import { DetailHero } from './detail/DetailHero'
+import { DetailTab, DetailTabs } from './detail/DetailTabs'
+import { ApplicationUpdate, cancelInterviewWithUndo, completeTaskWithUndo, deleteNoteWithUndo, deleteTaskWithUndo } from './detail/detailActions'
+import { InfoPanel } from './detail/InfoPanel'
+import { Interviews } from './detail/Interviews'
+import { NextStepCard } from './detail/NextStepCard'
+import { Tasks } from './detail/Tasks'
+import { Timeline } from './detail/Timeline'
+import { buildTimelineEntries } from './detail/timelineEntries'
+import { InterviewModal, InterviewStatusMove } from './modals/InterviewModal'
 import { NoteModal } from './modals/NoteModal'
 import { StatusModal } from './modals/StatusModal'
 import { TaskModal } from './modals/TaskModal'
+import { useStatusChange } from './useStatusChange'
 
-export function ApplicationDetail({ application, update, onChangeStatus, onDelete, navigate, toast }: { application: Application; update: (fn: (a: Application) => Application) => void; onChangeStatus: (status: Status, appliedAt?: string) => void; onDelete: () => void; navigate: (s: string) => void; toast: ToastFn }) {
-  const [tab, setTab] = useState<'timeline' | 'interviews' | 'tasks'>('timeline')
-  const [modal, setModal] = useState<'status' | 'note' | 'interview' | 'task' | 'delete' | null>(null)
-  const info = [
-    { icon: MapPin, label: 'Địa điểm', value: application.location || 'Chưa cập nhật' },
-    { icon: CalendarDays, label: 'Ngày ứng tuyển', value: formatDate(application.appliedAt) },
-    { icon: Clock3, label: 'Hạn nộp', value: formatDate(application.deadlineAt) },
-    { icon: Link2, label: 'Nguồn', value: application.source || 'Chưa cập nhật' },
-  ]
+type DetailModal = { kind: 'status' | 'note' | 'interview' | 'delete' } | { kind: 'task'; initialTitle?: string } | null
 
-  // applyStatusChange via useStatusChange: appends STATUS_CHANGED and shows the 'Hoàn tác' toast.
-  const changeStatus = (status: Status, appliedAt?: string) => { setModal(null); onChangeStatus(status, appliedAt) }
+export function ApplicationDetail({ application, updateApplication, onDelete, navigate, toast }: {
+  application: Application
+  updateApplication: UpdateApplicationFn
+  onDelete: () => void
+  navigate: (to: string) => void
+  toast: ToastFn
+}) {
+  const { id } = application
+  const update = useCallback<ApplicationUpdate>(updater => updateApplication(id, updater), [updateApplication, id])
+  // One shared status rule: commits with a 'Hoàn tác' toast, or asks for the applied date first. Its dialog renders at page level.
+  const { requestStatusChange, commitStatusChange, statusModal } = useStatusChange(updateApplication, toast)
+  const nowMs = useNow()
+  const now = useMemo(() => nowMs ? new Date(nowMs) : null, [nowMs])
+  const entries = useMemo(() => buildTimelineEntries(application), [application])
+  const [tab, setTab] = useState<DetailTab>('timeline')
+  const [modal, setModal] = useState<DetailModal>(null)
+  const closeModal = () => setModal(null)
+
+  const selectStatus = (status: Status) => requestStatusChange(application, status)
+  const saveStatus = (status: Status, appliedAt?: string) => { closeModal(); commitStatusChange(application, status, appliedAt) }
+
   const addNote = (content: string) => {
-    const now = new Date().toISOString(); const note: Note = { id: uid(), content, createdAt: now, updatedAt: now }
-    update(a => ({ ...a, updatedAt: now, appNotes: [note, ...a.appNotes], activities: [{ id: uid(), type: 'NOTE_ADDED', createdAt: now, label: 'Đã thêm ghi chú', detail: content }, ...a.activities] }))
-    setModal(null); toast('Đã thêm ghi chú')
-  }
-  const addInterview = (interview: Interview) => {
     const now = new Date().toISOString()
-    update(a => ({ ...a, updatedAt: now, interviews: [interview, ...a.interviews], activities: [{ id: uid(), type: 'INTERVIEW_CREATED', createdAt: now, label: 'Đã lên lịch phỏng vấn', detail: interview.title }, ...a.activities] }))
-    setModal(null); setTab('interviews'); toast('Đã tạo lịch phỏng vấn')
+    const note: Note = { id: uid(), content, createdAt: now, updatedAt: now }
+    update(a => ({ ...a, updatedAt: now, appNotes: [note, ...a.appNotes], activities: [{ id: uid(), type: 'NOTE_ADDED', createdAt: now, label: 'Đã thêm ghi chú', detail: content }, ...a.activities] }))
+    closeModal(); setTab('timeline'); toast('Đã thêm ghi chú')
   }
-  const addTask = (task: JobTask) => { update(a => ({ ...a, updatedAt: new Date().toISOString(), tasks: [task, ...a.tasks] })); setModal(null); setTab('tasks'); toast('Đã thêm việc cần làm') }
+
+  // One updater: the interview, its activity and the optional move to INTERVIEW land in a single pending save.
+  const addInterview = (interview: Interview, move: InterviewStatusMove | null) => {
+    const now = new Date().toISOString()
+    const result = { moved: false }
+    update(a => {
+      const scheduled: Application = { ...a, updatedAt: now, interviews: [interview, ...a.interviews], activities: [{ id: uid(), type: 'INTERVIEW_CREATED', createdAt: now, label: 'Đã lên lịch phỏng vấn', detail: interview.title }, ...a.activities] }
+      if (!move || a.status === 'INTERVIEW') return scheduled
+      result.moved = true
+      return applyStatusChange(scheduled, 'INTERVIEW', move.appliedAt)
+    })
+    closeModal(); setTab('interviews')
+    toast(result.moved ? 'Đã tạo lịch phỏng vấn và chuyển sang Phỏng vấn' : 'Đã tạo lịch phỏng vấn')
+  }
+
+  const addTask = (task: JobTask) => {
+    update(a => ({ ...a, updatedAt: new Date().toISOString(), tasks: [task, ...a.tasks] }))
+    closeModal(); setTab('tasks'); toast('Đã thêm việc cần làm')
+  }
+
+  const toggleTask = (task: JobTask) => {
+    if (!task.completedAt) { completeTaskWithUndo(update, toast, task); return }
+    update(a => ({ ...a, tasks: a.tasks.map(t => t.id === task.id ? { ...t, completedAt: undefined } : t) }))
+    toast('Đã mở lại công việc')
+  }
+
+  const openTasks = application.tasks.filter(task => !task.completedAt).length
 
   return <div className="page detail-page">
-    <button className="back-button" onClick={() => navigate('/applications')}><ArrowLeft size={17} /> Tất cả đơn ứng tuyển</button>
-    <div className="detail-hero">
-      <div><div className="eyebrow">{application.companyName}</div><h1>{application.jobTitle}</h1><div className="hero-meta"><StatusBadge status={application.status} /></div></div>
-      <div className="detail-actions"><button className="secondary" onClick={() => navigate(`/applications/${application.id}/edit`)}><Pencil size={17} /> Chỉnh sửa</button><button className="primary" onClick={() => setModal('status')}>Đổi trạng thái <ChevronDown size={16} /></button><button className="icon-button danger-hover" onClick={() => setModal('delete')} aria-label="Xóa đơn"><Trash2 size={18} /></button></div>
-    </div>
+    <button type="button" className="back-button" onClick={() => navigate('/applications')}><ArrowLeft size={17} /> Tất cả đơn ứng tuyển</button>
+    <DetailHero application={application} onSelectStatus={selectStatus} onOtherStatus={() => setModal({ kind: 'status' })} onDelete={() => setModal({ kind: 'delete' })} />
     <div className="detail-layout">
       <div className="detail-main">
-        <section className="panel info-panel">
-          <div className="info-grid">{info.map(item => <div className="info-item" key={item.label}><span><item.icon size={17} /></span><div><small>{item.label}</small><strong>{item.value}</strong></div></div>)}</div>
-          {application.jobUrl && <a className="job-link" href={application.jobUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Mở tin tuyển dụng gốc</a>}
-          {application.description && <div className="description"><h3>Mô tả công việc</h3><p>{application.description}</p></div>}
-          {application.cvContent && <div className="description cv-content"><h3><FileText size={17} /> Nội dung CV đã sử dụng</h3><p>{application.cvContent}</p></div>}
-        </section>
+        <InfoPanel application={application} toast={toast} />
         <section className="panel activity-panel">
-          <div className="tabs" role="tablist">
-            <button className={tab === 'timeline' ? 'active' : ''} onClick={() => setTab('timeline')}>Dòng thời gian <span>{application.activities.length}</span></button>
-            <button className={tab === 'interviews' ? 'active' : ''} onClick={() => setTab('interviews')}>Phỏng vấn <span>{application.interviews.length}</span></button>
-            <button className={tab === 'tasks' ? 'active' : ''} onClick={() => setTab('tasks')}>Việc cần làm <span>{application.tasks.filter(t => !t.completedAt).length}</span></button>
-          </div>
-          {tab === 'timeline' && <Timeline application={application} addNote={() => setModal('note')} update={update} />}
-          {tab === 'interviews' && <Interviews application={application} onAdd={() => setModal('interview')} update={update} toast={toast} />}
-          {tab === 'tasks' && <Tasks application={application} onAdd={() => setModal('task')} update={update} toast={toast} />}
+          <DetailTabs label="Hoạt động của đơn" active={tab} onChange={setTab} tabs={[
+            { id: 'timeline', label: 'Dòng thời gian', count: entries.length, panel: <Timeline entries={entries} now={now} onAddNote={() => setModal({ kind: 'note' })} onDeleteNote={noteId => deleteNoteWithUndo(update, toast, noteId)} /> },
+            { id: 'interviews', label: 'Phỏng vấn', count: application.interviews.length, panel: <Interviews interviews={application.interviews} onAdd={() => setModal({ kind: 'interview' })} onCancel={interview => cancelInterviewWithUndo(update, toast, interview)} /> },
+            { id: 'tasks', label: 'Việc cần làm', count: openTasks, panel: <Tasks tasks={application.tasks} now={now} onAdd={() => setModal({ kind: 'task' })} onToggle={toggleTask} onDelete={task => deleteTaskWithUndo(update, toast, task.id)} /> },
+          ]} />
         </section>
       </div>
       <aside className="detail-aside">
-        <section className="panel next-step">
-          <span className="aside-icon"><Sparkles size={20} /></span><h3>Bước tiếp theo</h3>
-          <button className="secondary full" onClick={() => setModal('task')}><Plus size={16} />{application.status === 'INTERVIEW' ? 'Thêm việc chuẩn bị' : 'Thêm việc cần làm'}</button>
-        </section>
-        <section className="panel contact-card"><h3>Liên hệ</h3>{application.contactName || application.contactEmail ? <><div className="contact-person"><span><UserRound size={19} /></span><div><strong>{application.contactName || 'Nhà tuyển dụng'}</strong></div></div>{application.contactEmail && <a href={`mailto:${application.contactEmail}`}><Mail size={15} />{application.contactEmail}</a>}</> : <p>Chưa có thông tin người liên hệ.</p>}</section>
+        <NextStepCard
+          application={application}
+          now={now}
+          onCompleteTask={task => completeTaskWithUndo(update, toast, task)}
+          onMarkApplied={() => selectStatus('APPLIED')}
+          onAddTask={initialTitle => setModal({ kind: 'task', initialTitle })}
+        />
+        <ContactCard application={application} />
         {application.notes && <section className="panel quick-note"><h3>Ghi chú nhanh</h3><p>{application.notes}</p></section>}
       </aside>
     </div>
-    {modal === 'status' && <StatusModal application={application} onClose={() => setModal(null)} onSave={changeStatus} />}
-    {modal === 'note' && <NoteModal onClose={() => setModal(null)} onSave={addNote} />}
-    {modal === 'interview' && <InterviewModal onClose={() => setModal(null)} onSave={addInterview} />}
-    {modal === 'task' && <TaskModal onClose={() => setModal(null)} onSave={addTask} />}
-    {modal === 'delete' && <ConfirmModal title="Xóa đơn ứng tuyển?" description={`Đơn “${application.jobTitle}” tại ${application.companyName} sẽ không còn xuất hiện trong danh sách và dashboard.`} onClose={() => setModal(null)} onConfirm={onDelete} />}
+    {modal?.kind === 'status' && <StatusModal application={application} onClose={closeModal} onSave={saveStatus} />}
+    {modal?.kind === 'note' && <NoteModal onClose={closeModal} onSave={addNote} />}
+    {modal?.kind === 'interview' && <InterviewModal application={application} onClose={closeModal} onSave={addInterview} />}
+    {modal?.kind === 'task' && <TaskModal initialTitle={modal.initialTitle} onClose={closeModal} onSave={addTask} />}
+    {modal?.kind === 'delete' && <ConfirmModal title="Xóa đơn ứng tuyển?" description={`Đơn “${application.jobTitle}” tại ${application.companyName} sẽ không còn xuất hiện trong danh sách và dashboard.`} onClose={closeModal} onConfirm={onDelete} />}
+    {statusModal}
   </div>
 }

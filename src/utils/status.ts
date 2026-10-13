@@ -19,3 +19,13 @@ export function applyStatusChange(app: Application, status: Status, appliedAt?: 
 /** Spec F07 "đơn đang hoạt động". SAVED is not sent yet; OFFER, REJECTED and WITHDRAWN are terminal. */
 export const ACTIVE_STATUSES: Status[] = ['APPLIED', 'SCREENING', 'INTERVIEW']
 export const isActiveApplication = (app: Application) => !app.deletedAt && ACTIVE_STATUSES.includes(app.status)
+
+/** The forward pipeline the detail stepper and the board columns walk through. REJECTED and WITHDRAWN close an application. */
+export const PIPELINE_STAGES: Status[] = ['SAVED', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER']
+export const CLOSED_STATUSES: Status[] = ['REJECTED', 'WITHDRAWN']
+export const isClosedStatus = (status: Status) => CLOSED_STATUSES.includes(status)
+/** The stage after `status` in the pipeline; null at OFFER and for a closed application. */
+export function nextStage(status: Status): Status | null {
+  const index = PIPELINE_STAGES.indexOf(status)
+  return index >= 0 && index < PIPELINE_STAGES.length - 1 ? PIPELINE_STAGES[index + 1] : null
+}
