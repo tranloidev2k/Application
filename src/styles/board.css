@@ -1,0 +1,124 @@
+/* ---- 5.2b Applications board ----
+   A white panel holding grey status lanes with white cards. The five pipeline columns scroll sideways inside the
+   panel (never the page); the two closed-status rails sit to their right and stay in view. */
+
+/* The board uses wide screens fully; the list keeps the standard page width. */
+.page.board-mode { max-width: 1760px; }
+
+/* -- View switch in the page header -- */
+.view-switch { flex: none; }
+.view-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.view-switch button > svg { flex: none; }
+
+/* -- Panel and layout -- */
+.board-panel { padding: 12px; }
+.board-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+.board-viewport { position: relative; min-width: 0; }
+.board {
+  height: 100%; overflow-x: auto; overscroll-behavior-x: contain;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(264px, 1fr); gap: 12px;
+  scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+}
+/* Columns cut off at the scroller's edge fade out, so the sideways scroll shows without a scrollbar.
+   An overlay rather than a mask, so the fixed status menu and drop targets are never clipped. */
+.board-viewport::before, .board-viewport::after {
+  content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; width: 40px;
+  opacity: 0; pointer-events: none; transition: opacity .15s ease;
+}
+.board-viewport::before { left: 0; background: linear-gradient(to right, var(--surface), transparent); }
+.board-viewport::after { right: 0; background: linear-gradient(to left, var(--surface), transparent); }
+.board-viewport.overflow-start::before, .board-viewport.overflow-end::after { opacity: 1; }
+.board-rails { display: flex; gap: 12px; }
+
+/* -- Column: header, then a vertically scrolling list -- */
+.board-column {
+  min-width: 0; display: flex; flex-direction: column;
+  border-radius: var(--r-md); background: var(--bg);
+  transition: background-color .15s ease, outline-color .15s ease;
+}
+.board-column.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+.board-column-head { min-height: 46px; padding: 0 12px; display: flex; align-items: center; gap: 8px; }
+.board-column-title { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: var(--fs-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.board-column-head .count-pill { background: var(--surface); }
+.board-column-body { flex: 1; min-height: 132px; max-height: calc(100vh - 260px); padding: 0 8px 8px; overflow-y: auto; overscroll-behavior-y: contain; }
+.board-list { margin: 0; padding: 0; display: grid; gap: 8px; list-style: none; }
+.board-empty {
+  min-height: 112px; margin: 0; display: grid; place-items: center;
+  border: 1.5px dashed var(--line-strong); border-radius: var(--r-md);
+  color: var(--text-subtle); font-size: var(--fs-sm);
+}
+.board-column.drop-target .board-empty { border-color: var(--accent); color: var(--accent); }
+
+/* A card waiting on the applied-date dialog to land in this column */
+.board-ghost {
+  min-height: 52px; padding: 10px 12px; display: flex; align-items: center;
+  border: 1.5px dashed var(--accent); border-radius: var(--r-md); background: var(--surface);
+  color: var(--accent); font-size: var(--fs-sm); font-weight: 600; line-height: 1.35;
+}
+
+/* -- Closed-status rails: a 56px strip with a vertical label, a full column when open -- */
+.board-rail { width: 56px; }
+.board-rail.expanded { width: 264px; }
+.board-rail-toggle {
+  flex: 1; width: 100%; min-height: 220px; padding: 14px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  border: 0; border-radius: inherit; background: transparent; color: var(--text); cursor: pointer;
+  transition: background-color .15s ease;
+}
+.board-rail-toggle:hover { background: var(--line); }
+.board-rail-toggle:focus-visible { outline-offset: -2px; }
+.board-rail-label { writing-mode: vertical-rl; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.board-rail-toggle .count-pill { background: var(--surface); }
+.board-rail-collapse { width: 28px; height: 28px; margin-right: -6px; }
+
+/* -- Card -- */
+.board-card {
+  padding: 12px; display: grid; gap: 8px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-sm);
+  cursor: grab; transition: border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.board-card:hover { border-color: var(--line-strong); box-shadow: 0 2px 8px rgba(24, 24, 27, .08); }
+.board-card:active { cursor: grabbing; }
+.board-card.dragging { opacity: .4; }
+.board-card-head { display: flex; align-items: flex-start; gap: 6px; }
+.board-card-title {
+  flex: 1; min-width: 0; overflow: hidden; border-radius: 4px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  color: var(--text); font-size: var(--fs-base); font-weight: 600; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere;
+}
+.board-card-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+.board-card-company { min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--text-subtle); font-size: var(--fs-sm); }
+.board-card-company > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-card .monogram { width: 24px; height: 24px; border-radius: 7px; font-size: var(--fs-xs); }
+.board-card .next-action { gap: 3px; }
+.board-card-updated { color: var(--text-subtle); font-size: var(--fs-xs); }
+
+/* Status menu trigger on a card: a small chevron, always visible */
+.status-trigger-icon {
+  width: 28px; height: 28px; flex: none; margin: -3px -5px 0 0; display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--text-subtle); cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.status-trigger-icon:hover, .status-trigger-icon[aria-expanded="true"] { border-color: var(--line); background: var(--bg); color: var(--text); }
+
+/* A saved application's deadline: neutral, amber when close, red once passed */
+.deadline-chip {
+  justify-self: start; max-width: 100%; min-height: 24px; padding: 0 8px;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid transparent; border-radius: var(--r-pill); background: var(--bg); color: var(--text-muted);
+  font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
+}
+.deadline-chip > svg { flex: none; }
+.deadline-chip.soon { background: var(--warning-soft); color: var(--warning); }
+.deadline-chip.overdue { border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: var(--surface); color: var(--danger); }
+
+/* -- Loading -- */
+.board-skeleton .board-card { cursor: default; box-shadow: none; }
+.board-skeleton .board-card:hover { border-color: var(--line); }
+.board-skeleton .board-column-body { display: grid; align-content: start; gap: 8px; }
+.board-skeleton .board-column .skeleton { background-image: linear-gradient(90deg, var(--line) 25%, var(--line-strong) 37%, var(--line) 63%); }
+.board-skeleton .board-card .skeleton { background-image: linear-gradient(90deg, var(--bg) 25%, var(--line) 37%, var(--bg) 63%); }
+.board-skeleton .sk-head { width: 96px; height: 12px; }
+.board-skeleton .sk-line { width: 80%; height: 12px; }
+.board-skeleton .sk-line.short { width: 50%; }
+.board-skeleton .board-rail { min-height: 220px; }

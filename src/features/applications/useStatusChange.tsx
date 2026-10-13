@@ -6,10 +6,14 @@ import type { ToastFn, UpdateApplicationFn } from '../../context/AppDataContext'
 import { applyStatusChange, NEEDS_APPLIED_DATE } from '../../utils/status'
 import { StatusModal } from './modals/StatusModal'
 
+/** A status change waiting for its applied date in StatusModal. */
+export type PendingStatusChange = { applicationId: string; status: Status }
+
 /**
  * The shared status-change flow. requestStatusChange commits at once with an undo toast, or first asks for an
  * applied date when the target status needs one. Undo is a reverse transition appended to the immutable history.
- * Render `statusModal` at page level, never inside a clickable row/card or a <form>.
+ * Render `statusModal` at page level, never inside a clickable row/card or a <form>. `pendingChange` is the move
+ * waiting on that dialog, so a view can preview it (the board's ghost card).
  */
 export function useStatusChange(updateApplication: UpdateApplicationFn, toast: ToastFn) {
   const [request, setRequest] = useState<{ application: Application; status: Status } | null>(null)
@@ -50,5 +54,7 @@ export function useStatusChange(updateApplication: UpdateApplicationFn, toast: T
     }}
   /> : null
 
-  return { requestStatusChange, commitStatusChange, statusModal }
+  const pendingChange: PendingStatusChange | null = request ? { applicationId: request.application.id, status: request.status } : null
+
+  return { requestStatusChange, commitStatusChange, statusModal, pendingChange }
 }

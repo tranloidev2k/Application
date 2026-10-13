@@ -1,23 +1,22 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
 import { Application, JobTask } from '../../types'
 import type { SyncState, ToastFn, UpdateApplicationFn } from '../../context/AppDataContext'
 import { useDelayElapsed } from '../../hooks/useDelayElapsed'
 import { useNow } from '../../hooks/useNow'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
-import { ApplicationsTable } from './list/ApplicationsTable'
+import { BoardSkeleton } from './board/BoardSkeleton'
+import { BoardView } from './board/BoardView'
 import { applicationLinkId } from './list/ApplicationRow'
-import { PAGE_SIZE } from './list/applicationsQuery'
 import { FilterBar } from './list/FilterBar'
-import { FilteredEmpty } from './list/FilteredEmpty'
 import { ListSkeleton } from './list/ListSkeleton'
+import { ListView } from './list/ListView'
 import { OnboardingEmpty } from './list/OnboardingEmpty'
-import { Pagination } from './list/Pagination'
-import { StatusTabs } from './list/StatusTabs'
 import { useApplicationsQuery } from './list/useApplicationsQuery'
+import { useApplicationsView } from './list/useApplicationsView'
+import { ViewSwitch } from './list/ViewSwitch'
 import { TaskModal } from './modals/TaskModal'
 import { softDeleteApplication } from './softDeleteApplication'
 import { useStatusChange } from './useStatusChange'
@@ -39,8 +38,10 @@ export function ApplicationsPage({ applications, navigate, updateApplication, to
   const hasLive = useMemo(() => applications.some(app => !app.deletedAt), [applications])
   // Relative dates need the client clock (`nowMs` is 0 during SSR and hydration).
   const loading = !ready || !nowMs || (!hasLive && syncState === 'connecting' && !skeletonCapped)
-  const list = useApplicationsQuery(applications, loading)
-  const { requestStatusChange, statusModal } = useStatusChange(updateApplication, toast)
+  const [view, setView] = useApplicationsView()
+  const board = view === 'board'
+  const list = useApplicationsQuery(applications, loading, view)
+  const { requestStatusChange, statusModal, pendingChange } = useStatusChange(updateApplication, toast)
   const [deleteTarget, setDeleteTarget] = useState<Application | null>(null)
   const [taskTarget, setTaskTarget] = useState<Application | null>(null)
 
@@ -65,21 +66,13 @@ export function ApplicationsPage({ applications, navigate, updateApplication, to
     setDeleteTarget(null)
   }
 
-  return <div className="page applications-page">
-    <PageHeader title="Đơn ứng tuyển" subtitle={subtitle} />
-    {loading ? <ListSkeleton /> : !list.live.length ? <OnboardingEmpty /> : <>
+  return <div className={`page applications-page ${board ? 'board-mode' : ''}`}>
+    <PageHeader title="Đơn ứng tuyển" subtitle={subtitle} action={!loading && list.live.length ? <ViewSwitch view={view} onChange={setView} /> : undefined} />
+    {loading ? board ? <BoardSkeleton /> : <ListSkeleton /> : !list.live.length ? <OnboardingEmpty /> : <>
       <FilterBar query={list.query} onQuery={list.setQuery} source={list.source} sources={list.sources} onSource={list.setSource} sort={list.sort} onSort={list.setSort} />
-      <StatusTabs total={list.searchedCount} counts={list.statusCounts} selected={list.statuses} onChange={list.setStatuses} />
-      {list.filtersActive && <div className="active-filter">
-        <span>{list.filtered.length} kết quả phù hợp</span>
-        <button type="button" onClick={list.clear}><X size={14} aria-hidden="true" /> Xóa bộ lọc</button>
-      </div>}
-      <section className="table-panel">
-        {list.pageItems.length ? <>
-          <ApplicationsTable items={list.pageItems} now={now} navigate={navigate} onStatusSelect={requestStatusChange} onAddNext={setTaskTarget} onDelete={setDeleteTarget} />
-          <Pagination page={list.page} totalPages={list.totalPages} pageSize={PAGE_SIZE} total={list.filtered.length} onPage={list.setPage} />
-        </> : <FilteredEmpty query={list.query} statuses={list.statuses} source={list.source} onClear={list.clear} />}
-      </section>
+      {board
+        ? <BoardView list={list} now={now} navigate={navigate} onMove={requestStatusChange} pending={pendingChange} />
+        : <ListView list={list} now={now} navigate={navigate} onStatusSelect={requestStatusChange} onAddNext={setTaskTarget} onDelete={setDeleteTarget} />}
     </>}
     {statusModal}
     {taskTarget && <TaskModal description={`${taskTarget.jobTitle} · ${taskTarget.companyName}`} onClose={() => setTaskTarget(null)} onSave={addTask} />}

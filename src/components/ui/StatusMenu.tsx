@@ -1,6 +1,7 @@
 'use client'
 
 import { KeyboardEvent, MouseEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { Status, STATUSES, STATUS_META } from '../../types'
 import { isInteractiveTarget } from '../../utils/interactive'
@@ -14,10 +15,14 @@ const EDGE = 8
 
 type MenuPosition = { left: number; top?: number; bottom?: number }
 
-/** Below the trigger when the menu fits there (or there is more room below), otherwise above it, kept inside the viewport. */
-function menuPosition(trigger: DOMRect, itemCount: number): MenuPosition {
+/**
+ * Below the trigger when the menu fits there (or there is more room below), otherwise above it, kept inside the viewport.
+ * `end` lines the menu's right edge up with the trigger's (for a small trigger at the right of a card).
+ */
+function menuPosition(trigger: DOMRect, itemCount: number, align: 'start' | 'end'): MenuPosition {
   const height = itemCount * ITEM_HEIGHT + MENU_CHROME
-  const left = Math.max(EDGE, Math.min(trigger.left, window.innerWidth - MENU_WIDTH - EDGE))
+  const preferred = align === 'end' ? trigger.right - MENU_WIDTH : trigger.left
+  const left = Math.max(EDGE, Math.min(preferred, window.innerWidth - MENU_WIDTH - EDGE))
   const below = window.innerHeight - trigger.bottom - GAP - EDGE
   if (below >= height || below >= trigger.top) return { left, top: trigger.bottom + GAP }
   return { left, bottom: window.innerHeight - trigger.top + GAP }
@@ -28,14 +33,18 @@ function menuPosition(trigger: DOMRect, itemCount: number): MenuPosition {
  * `onSelect` only fires for a different status; route it through useStatusChange so the shared rule applies.
  * Clicks on the trigger and inside the menu never reach a clickable parent (row or card). An outside click only
  * dismisses the menu: it does not also activate a non-interactive parent such as a row.
+ * The menu is portalled to <body>, so a scrolling or draggable ancestor (a board column or card) never clips or drags it.
+ * The `icon` variant is a small chevron button named 'Đổi trạng thái {contextLabel}', for places where the status is
+ * already shown (a board column).
  */
-export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel }: {
+export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel, variant = 'badge' }: {
   status: Status
   onSelect: (status: Status) => void
   /** Limits the choices; defaults to every status. */
   statuses?: Status[]
   /** Appended to the trigger's accessible name, e.g. the job title, so many triggers on one page stay distinguishable. */
   contextLabel?: string
+  variant?: 'badge' | 'icon'
 }) {
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -86,7 +95,7 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
     }
   }, [open])
 
-  const openMenu = (trigger: HTMLElement) => setPosition(menuPosition(trigger.getBoundingClientRect(), statuses.length))
+  const openMenu = (trigger: HTMLElement) => setPosition(menuPosition(trigger.getBoundingClientRect(), statuses.length, variant === 'icon' ? 'end' : 'start'))
 
   const onTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -136,18 +145,22 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
     <button
       ref={triggerRef}
       type="button"
-      className="status-trigger"
+      className={variant === 'icon' ? 'status-trigger-icon' : 'status-trigger'}
       aria-haspopup="menu"
       aria-expanded={open}
       aria-controls={open ? menuId : undefined}
+      aria-label={variant === 'icon' ? `Đổi trạng thái ${contextLabel ?? ''}`.trim() : undefined}
+      title={variant === 'icon' ? 'Đổi trạng thái' : undefined}
       onClick={onTriggerClick}
       onKeyDown={onTriggerKeyDown}
     >
-      <StatusBadge status={status} />
-      <span className="sr-only">, đổi trạng thái{contextLabel ? ` đơn ${contextLabel}` : ''}</span>
-      <ChevronDown className="status-trigger-chevron" size={15} aria-hidden="true" />
+      {variant === 'icon' ? <ChevronDown size={16} aria-hidden="true" /> : <>
+        <StatusBadge status={status} />
+        <span className="sr-only">, đổi trạng thái{contextLabel ? ` đơn ${contextLabel}` : ''}</span>
+        <ChevronDown className="status-trigger-chevron" size={15} aria-hidden="true" />
+      </>}
     </button>
-    {position && <div
+    {position && createPortal(<div
       ref={menuRef}
       id={menuId}
       className="menu status-menu"
@@ -166,6 +179,6 @@ export function StatusMenu({ status, onSelect, statuses = STATUSES, contextLabel
           {checked && <Check className="menu-item-check" size={16} aria-hidden="true" />}
         </button>
       })}
-    </div>}
+    </div>, document.body)}
   </>
 }
