@@ -3,6 +3,7 @@
 import { KeyboardEvent as ReactKeyboardEvent, useEffect, useRef } from 'react'
 import { Flag } from 'lucide-react'
 import { formatTime, formatWeekdayDate } from '../../utils/date'
+import { eventColorClass } from '../../utils/eventColors'
 import { calendarEventKey, CalendarDeadline, CalendarEvent, deadlineAriaLabel, eventAriaLabel } from './calendarUtils'
 
 const MENU_WIDTH = 280
@@ -114,7 +115,7 @@ export function DayEventsPopover({ day, events, deadlines, overdue, anchor, onPi
       type="button"
       role="menuitem"
       tabIndex={-1}
-      className={`menu-item day-events-item ${event.kind} ${event.completedAt ? 'completed' : ''}`}
+      className={`menu-item day-events-item ${event.kind} ${eventColorClass(event.color)} ${event.completedAt ? 'completed' : ''}`}
       aria-label={eventAriaLabel(event)}
       onClick={click => onPick(event, click.currentTarget)}
     >

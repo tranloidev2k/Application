@@ -10,6 +10,9 @@ export interface Activity {
   detail?: string
 }
 
+/** A colour picked for one calendar event; without one the event uses its kind's look. Labels: utils/eventColors. */
+export type EventColor = 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'pink' | 'teal' | 'gray'
+
 export interface Note {
   id: string
   content: string
@@ -28,6 +31,7 @@ export interface Interview {
   interviewer?: string
   note?: string
   cancelledAt?: string
+  color?: EventColor
 }
 
 export interface JobTask {
@@ -37,6 +41,7 @@ export interface JobTask {
   dueAt?: string
   endsAt?: string
   completedAt?: string
+  color?: EventColor
 }
 
 export interface PersonalTask {
@@ -47,6 +52,7 @@ export interface PersonalTask {
   endsAt: string
   completedAt?: string
   updatedAt: string
+  color?: EventColor
 }
 
 export interface Application {

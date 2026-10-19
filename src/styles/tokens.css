@@ -53,6 +53,15 @@
   --event-deadline-fg: #92400e;   --event-deadline-bg: #fef3c7;   --event-deadline-line: #d97706;
   /* A deadline that has passed: the one place the calendar uses red besides the current-time line */
   --event-overdue-fg: #b91c1c;    --event-overdue-bg: #fee2e2;    --event-overdue-line: #dc2626;
+  /* Colours a user can pick for one event (fg on bg ≥ 6.3:1; the border doubles as the swatch, ≥ 3:1 on white) */
+  --event-color-blue-fg: #1e40af;    --event-color-blue-bg: #dbeafe;    --event-color-blue-border: #3b82f6;
+  --event-color-green-fg: #166534;   --event-color-green-bg: #dcfce7;   --event-color-green-border: #16a34a;
+  --event-color-amber-fg: #92400e;   --event-color-amber-bg: #fef3c7;   --event-color-amber-border: #d97706;
+  --event-color-red-fg: #991b1b;     --event-color-red-bg: #fee2e2;     --event-color-red-border: #dc2626;
+  --event-color-violet-fg: #5b21b6;  --event-color-violet-bg: #ede9fe;  --event-color-violet-border: #7c3aed;
+  --event-color-pink-fg: #9d174d;    --event-color-pink-bg: #fce7f3;    --event-color-pink-border: #db2777;
+  --event-color-teal-fg: #115e59;    --event-color-teal-bg: #ccfbf1;    --event-color-teal-border: #0d9488;
+  --event-color-gray-fg: #3f3f46;    --event-color-gray-bg: #e4e4e7;    --event-color-gray-border: #71717a;
 
   /* Radius */
   --r-sm: 6px;

@@ -3,12 +3,14 @@
 import { useMemo } from 'react'
 import { Application, PersonalTask } from '../../types'
 import { calendarDateKey } from '../../utils/date'
+import { toEventColor } from '../../utils/eventColors'
 import { calendarEventKey, CalendarEvent } from './calendarUtils'
 
 /**
  * Every timed calendar item, sorted by start: personal tasks, dated application tasks and interviews that are not
- * cancelled (of applications that are not deleted). `byDay` groups them by local date key, in the same order; `byKey`
- * finds the current version of an event (e.g. for an open popover after the event was ticked off).
+ * cancelled (of applications that are not deleted), each with its colour when it has a valid one. `byDay` groups them
+ * by local date key, in the same order; `byKey` finds the current version of an event (e.g. for an open popover after
+ * the event was ticked off).
  * Application deadlines are not events: see useCalendarDeadlines.
  */
 export function useCalendarEvents(applications: Application[], personalTasks: PersonalTask[]) {
@@ -22,6 +24,7 @@ export function useCalendarEvents(applications: Application[], personalTasks: Pe
         endsAt: personal.endsAt,
         completedAt: personal.completedAt,
         note: personal.note,
+        color: toEventColor(personal.color),
         personal,
       })),
       ...applications.filter(application => !application.deletedAt).flatMap(application => [
@@ -33,6 +36,7 @@ export function useCalendarEvents(applications: Application[], personalTasks: Pe
           endsAt: task.endsAt,
           completedAt: task.completedAt,
           note: task.note,
+          color: toEventColor(task.color),
           application,
           task,
         })),
@@ -43,6 +47,7 @@ export function useCalendarEvents(applications: Application[], personalTasks: Pe
           startsAt: interview.startsAt,
           endsAt: interview.endsAt,
           note: interview.note,
+          color: toEventColor(interview.color),
           application,
           interview,
         })),

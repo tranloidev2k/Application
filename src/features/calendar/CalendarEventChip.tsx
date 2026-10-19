@@ -1,12 +1,13 @@
 import { Check, Video } from 'lucide-react'
 import { formatTime } from '../../utils/date'
+import { eventColorClass } from '../../utils/eventColors'
 import { anchorOf, CalendarEvent, eventAriaLabel, eventTimeRange, PopoverAnchor } from './calendarUtils'
 
 /**
  * One event in a month cell: a separate check button for tasks, then the chip face. The face is a draggable
  * `div role="button"` (Firefox will not start an HTML5 drag from a native <button>); a click, Enter or Space opens the
  * event popover. Clicks never reach the cell, so they never open 'Thêm việc'. Interviews show a video icon in place of
- * the check button.
+ * the check button. A picked colour replaces the kind's tint (a completed chip stays muted).
  */
 export function CalendarEventChip({ event, dragging, onOpen, onToggle, onDragStart, onDragEnd }: {
   event: CalendarEvent
@@ -17,7 +18,7 @@ export function CalendarEventChip({ event, dragging, onOpen, onToggle, onDragSta
   onDragEnd: () => void
 }) {
   const time = formatTime(event.startsAt)
-  return <div className={`calendar-event-row ${event.kind} ${event.completedAt ? 'completed' : ''} ${dragging ? 'dragging' : ''}`} onClick={click => click.stopPropagation()}>
+  return <div className={`calendar-event-row ${event.kind} ${eventColorClass(event.color)} ${event.completedAt ? 'completed' : ''} ${dragging ? 'dragging' : ''}`} onClick={click => click.stopPropagation()}>
     {event.kind !== 'interview' && <button
       type="button"
       className="calendar-check"

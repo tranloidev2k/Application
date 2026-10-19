@@ -8,6 +8,7 @@ import type { ToastFn, UpdateApplicationFn } from '../../context/AppDataContext'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { usePersonalTasks } from '../../hooks/usePersonalTasks'
 import { calendarDateKey } from '../../utils/date'
+import { withEventColor } from '../../utils/eventColors'
 import { uid } from '../../utils/id'
 import { ConfirmModal } from '../../components/ui/ConfirmModal'
 import { CalendarTaskModal } from './CalendarTaskModal'
@@ -18,12 +19,14 @@ import {
 } from './calendarUtils'
 import { DayEventsPopover } from './DayEventsPopover'
 import { DeadlinePopover } from './DeadlinePopover'
+import { DuplicateEventModal } from './DuplicateEventModal'
 import { EventPopover } from './EventPopover'
 import { MonthView } from './MonthView'
 import { RescheduleModal } from './RescheduleModal'
 import { useCalendarDeadlines } from './useCalendarDeadlines'
 import { useCalendarEvents } from './useCalendarEvents'
 import { useCalendarMutations } from './useCalendarMutations'
+import { useDuplicateEvent } from './useDuplicateEvent'
 import { WeekView } from './WeekView'
 
 /** The open popover: an event (looked up live by key when shown) or a read-only deadline, and the element to refocus. */
@@ -57,13 +60,15 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
   const [popover, setPopover] = useState<PopoverState | null>(null)
   const [dayList, setDayList] = useState<DayListState | null>(null)
   const [rescheduling, setRescheduling] = useState<CalendarEvent | null>(null)
+  const [duplicating, setDuplicating] = useState<CalendarEvent | null>(null)
   const [editingTask, setEditingTask] = useState<PersonalTask | null>(null)
   const [deletingTask, setDeletingTask] = useState<PersonalTask | null>(null)
   const now = useMinuteClock()
   const personalTasks = usePersonalTasks(toast)
   const { byDay, byKey } = useCalendarEvents(applications, personalTasks.tasks)
   const deadlinesByDay = useCalendarDeadlines(applications)
-  const { toggleTask, moveEvent } = useCalendarMutations(personalTasks, updateApplication, toast)
+  const { toggleTask, moveEvent, recolorEvent } = useCalendarMutations(personalTasks, updateApplication, toast)
+  const duplicateEvent = useDuplicateEvent(personalTasks, updateApplication, toast)
 
   const todayKey = calendarDateKey(now)
   const weekDays = weekDaysOf(cursor)
@@ -195,9 +200,11 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
       onToggle={() => toggleTask(popoverEvent)}
       onCopy={(text, what) => { void copyText(text, what) }}
       onReschedule={fromPopover(setRescheduling)}
+      onDuplicate={fromPopover(setDuplicating)}
       onEdit={fromPopover(event => { if (event.personal) setEditingTask(event.personal) })}
       onDelete={fromPopover(event => { if (event.personal) setDeletingTask(event.personal) })}
       onOpenDetail={() => openApplication(popoverEvent.application?.id)}
+      onColor={color => recolorEvent(popoverEvent, color)}
     />}
     {popover?.type === 'deadline' && <DeadlinePopover
       key={`deadline-${popover.deadline.id}`}
@@ -211,12 +218,16 @@ export function CalendarPage({ applications, ready, navigate, updateApplication,
       moveEvent(rescheduling, start)
       setRescheduling(null)
     }} />}
+    {duplicating && <DuplicateEventModal event={duplicating} onClose={() => setDuplicating(null)} onSave={dayKeys => {
+      duplicateEvent(duplicating, dayKeys)
+      setDuplicating(null)
+    }} />}
     {creating && <CalendarTaskModal initialDate={creating.start} initialEndDate={creating.end} onClose={() => setCreating(null)} onSave={values => {
-      void personalTasks.save({ id: uid(), ...values, updatedAt: new Date().toISOString() }, 'Đã thêm công việc vào lịch')
+      void personalTasks.save(withEventColor({ id: uid(), ...values, updatedAt: new Date().toISOString() }, values.color), 'Đã thêm công việc vào lịch')
       setCreating(null)
     }} />}
     {editingTask && <CalendarTaskModal editing={editingTask} initialDate={new Date(editingTask.startsAt)} initialEndDate={new Date(editingTask.endsAt)} onClose={() => setEditingTask(null)} onSave={values => {
-      void personalTasks.save({ ...editingTask, ...values, updatedAt: new Date().toISOString() }, 'Đã cập nhật công việc')
+      void personalTasks.save(withEventColor({ ...editingTask, ...values, updatedAt: new Date().toISOString() }, values.color), 'Đã cập nhật công việc')
       setEditingTask(null)
     }} />}
     {deletingTask && <ConfirmModal

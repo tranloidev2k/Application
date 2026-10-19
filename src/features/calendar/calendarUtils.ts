@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react'
-import { Application, Interview, JobTask, PersonalTask } from '../../types'
+import { Application, EventColor, Interview, JobTask, PersonalTask } from '../../types'
 import { formatTime } from '../../utils/date'
+import { EVENT_COLOR_LABEL } from '../../utils/eventColors'
 
 export type CalendarView = 'month' | 'week'
 export type CalendarEventKind = 'task' | 'interview' | 'personal'
@@ -12,6 +13,8 @@ export type CalendarEvent = {
   endsAt?: string
   completedAt?: string
   note?: string
+  /** The colour picked for this event (none: the kind's look). */
+  color?: EventColor
   application?: Application
   task?: JobTask
   interview?: Interview
@@ -112,13 +115,14 @@ export const formatDuration = (minutes: number) => {
 /** '16:00–16:45'. */
 export const eventTimeRange = (event: CalendarEvent) => `${formatTime(event.startsAt)}–${formatTime(calendarEventEnd(event))}`
 
-/** Screen-reader name of an event chip: 'Phỏng vấn, 17:00 đến 18:00, Vòng kỹ thuật, FPT Software'. */
+/** Screen-reader name of an event chip: 'Phỏng vấn, 17:00 đến 18:00, Vòng kỹ thuật, FPT Software, màu Đỏ'. */
 export const eventAriaLabel = (event: CalendarEvent) => [
   KIND_LABEL[event.kind],
   `${formatTime(event.startsAt)} đến ${formatTime(calendarEventEnd(event))}`,
   event.title,
   event.application?.companyName,
   event.completedAt ? 'đã hoàn thành' : '',
+  event.color ? `màu ${EVENT_COLOR_LABEL[event.color]}` : '',
 ].filter(Boolean).join(', ')
 
 /** Screen-reader name of a deadline chip: 'Hạn nộp hồ sơ, Grab, Mobile Developer, đã quá hạn'. */

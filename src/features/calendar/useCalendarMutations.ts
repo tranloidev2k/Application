@@ -3,16 +3,20 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { ToastFn, ToastOptions, UpdateApplicationFn } from '../../context/AppDataContext'
 import type { usePersonalTasks } from '../../hooks/usePersonalTasks'
+import { EventColor } from '../../types'
+import { EVENT_COLOR_LABEL, withEventColor } from '../../utils/eventColors'
 import { CalendarEvent } from './calendarUtils'
 
 type PersonalTasksApi = ReturnType<typeof usePersonalTasks>
 type MoveEventFn = (event: CalendarEvent, target: Date, undoing?: boolean) => void
+type RecolorEventFn = (event: CalendarEvent, color: EventColor | undefined, undoing?: boolean) => void
 
 /**
- * Calendar writes: tick a task done (or reopen it) and move any event to a new start, keeping its duration. A move's
- * toast offers 'Hoàn tác', which moves the event back to its original start through the latest `moveEvent` (a ref, so a
- * toast clicked after other changes never runs a stale closure). Personal tasks are read back from the current list,
- * so a popover or toast holding an older copy never overwrites a newer change.
+ * Calendar writes: tick a task done (or reopen it), move any event to a new start, keeping its duration, and change an
+ * event's colour. A move's toast offers 'Hoàn tác', which moves the event back to its original start through the latest
+ * `moveEvent` (a ref, so a toast clicked after other changes never runs a stale closure); a colour change's undo
+ * restores the previous colour the same way. Personal tasks are read back from the current list, so a popover or toast
+ * holding an older copy never overwrites a newer change.
  */
 export function useCalendarMutations(personalTasks: PersonalTasksApi, updateApplication: UpdateApplicationFn, toast: ToastFn) {
   const { save, tasks } = personalTasks
@@ -76,5 +80,30 @@ export function useCalendarMutations(personalTasks: PersonalTasksApi, updateAppl
   }, [save, toast, updateApplication])
   useEffect(() => { moveRef.current = moveEvent }, [moveEvent])
 
-  return { toggleTask, moveEvent }
+  // Application tasks and interviews keep their colour in the application JSON; personal tasks in their own row.
+  const recolorRef = useRef<RecolorEventFn | null>(null)
+  const recolorEvent = useCallback<RecolorEventFn>((event, color, undoing = false) => {
+    const personal = event.personal ? tasksRef.current.find(item => item.id === event.id) ?? event.personal : undefined
+    // `event` is the live version when the popover calls this; the undo passes that same snapshot, so it never skips.
+    const previous = personal ? personal.color : event.color
+    if (!undoing && previous === color) return
+    const toastOptions: ToastOptions | undefined = undoing ? undefined : {
+      actionLabel: 'Hoàn tác',
+      onAction: () => recolorRef.current?.(event, previous, true),
+    }
+    const message = undoing ? 'Đã hoàn tác đổi màu' : color ? `Đã đổi màu thành ${EVENT_COLOR_LABEL[color]}` : 'Đã đặt lại màu mặc định'
+    if (personal) {
+      void save({ ...withEventColor(personal, color), updatedAt: new Date().toISOString() }, message, toastOptions)
+      return
+    }
+    const application = event.application
+    if (!application) return
+    updateApplication(application.id, application => event.kind === 'task'
+      ? { ...application, updatedAt: new Date().toISOString(), tasks: application.tasks.map(task => task.id === event.id ? withEventColor(task, color) : task) }
+      : { ...application, updatedAt: new Date().toISOString(), interviews: application.interviews.map(interview => interview.id === event.id ? withEventColor(interview, color) : interview) })
+    toast(message, toastOptions)
+  }, [save, toast, updateApplication])
+  useEffect(() => { recolorRef.current = recolorEvent }, [recolorEvent])
+
+  return { toggleTask, moveEvent, recolorEvent }
 }

@@ -1,0 +1,43 @@
+/* -- 'Nhân bản sự kiện': the source event, quick presets, a mini month calendar of toggle days and the count. -- */
+.duplicate-event { display: grid; gap: 14px; }
+.duplicate-source { display: grid; grid-template-columns: 35px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-subtle); }
+.duplicate-source > div { min-width: 0; display: grid; gap: 2px; }
+.duplicate-source strong { color: var(--text); font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+.duplicate-source span:not(.calendar-context-icon) { display: flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 12px; }
+.duplicate-event .duplicate-hint { margin: 0; }
+.duplicate-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.duplicate-presets .chip:disabled { opacity: .5; cursor: not-allowed; }
+
+.duplicate-calendar { display: grid; gap: 6px; max-width: 360px; width: 100%; justify-self: center; }
+.duplicate-calendar-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.duplicate-calendar-head h3 { margin: 0; text-align: center; color: var(--text); font-size: var(--fs-sm); font-weight: 600; text-transform: capitalize; }
+.duplicate-calendar-weekdays, .duplicate-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.duplicate-calendar-weekdays span { text-align: center; color: var(--text-subtle); font-size: 11px; font-weight: 600; }
+.duplicate-day {
+  position: relative; min-width: 0; height: 40px; padding: 0;
+  display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: var(--r-sm); background: transparent;
+  color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.duplicate-day:hover:not([aria-disabled="true"]) { background: var(--surface-subtle); border-color: var(--line); }
+.duplicate-day.outside { color: var(--text-subtle); }
+/* Today: an outlined number (aria-current says it to screen readers). */
+.duplicate-day.today span { min-width: 24px; padding: 2px 0; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 700; }
+/* The source event's day: dashed and hatched, not selectable. */
+.duplicate-day.source {
+  border: 1px dashed var(--line-strong); cursor: not-allowed; color: var(--text-muted);
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--surface-subtle) 5px 10px);
+}
+.duplicate-day[aria-disabled="true"]:not(.source):not(.selected) { color: var(--text-subtle); cursor: not-allowed; }
+.duplicate-day.selected { border-color: var(--ink); background: var(--ink); color: var(--on-ink); font-weight: 600; }
+.duplicate-day.selected.today span { box-shadow: inset 0 0 0 1.5px var(--on-ink); }
+.duplicate-day > svg { position: absolute; top: 3px; right: 3px; }
+
+.duplicate-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--text-muted); font-size: var(--fs-sm); }
+.duplicate-summary p { margin: 0; }
+.duplicate-summary strong { color: var(--text); font-weight: 600; }
+.duplicate-summary .duplicate-days { flex-basis: 100%; order: 2; font-size: 12px; overflow-wrap: anywhere; }
+.duplicate-summary .text-button { margin-left: auto; }
+@media (max-width: 420px) {
+  .duplicate-day { height: 36px; }
+}

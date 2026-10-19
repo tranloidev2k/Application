@@ -11,6 +11,8 @@ import '../src/styles/board.css'
 import '../src/styles/form.css'
 import '../src/styles/detail.css'
 import '../src/styles/calendar.css'
+import '../src/styles/event-colors.css'
+import '../src/styles/duplicate-event.css'
 import '../src/styles/account.css'
 import '../src/styles/motion.css'
 

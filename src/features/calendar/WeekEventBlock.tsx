@@ -1,6 +1,7 @@
 import { PointerEvent as ReactPointerEvent } from 'react'
 import { Video } from 'lucide-react'
 import { formatTime } from '../../utils/date'
+import { eventColorClass } from '../../utils/eventColors'
 import { anchorOf, calendarEventEnd, CalendarEvent, eventAriaLabel, eventTimeRange, PopoverAnchor } from './calendarUtils'
 import { laneStyle, WeekBlockGeometry, WeekBlockLane, weekBlockGeometry } from './weekLayout'
 
@@ -24,7 +25,10 @@ function WeekEventFace({ event, start, end, block }: { event: CalendarEvent; sta
   return <>{title}<time>{formatTime(start)}–{formatTime(end)}</time>{block.height >= SUBTITLE_HEIGHT && <small>{subtitle(event)}</small>}</>
 }
 
-/** An event in a week column, in its lane: a click (or Enter) opens the popover, a pointer drag moves it. */
+/**
+ * An event in a week column, in its lane, tinted by its picked colour (else its kind): a click (or Enter) opens the
+ * popover, a pointer drag moves it.
+ */
 export function WeekEventButton({ event, block, onPointerDown, onOpen, wasDrag }: {
   event: CalendarEvent
   block: WeekBlock
@@ -34,7 +38,7 @@ export function WeekEventButton({ event, block, onPointerDown, onOpen, wasDrag }
 }) {
   return <button
     type="button"
-    className={`week-event ${event.kind} ${event.completedAt ? 'completed' : ''} ${block.compact ? 'compact' : ''}`}
+    className={`week-event ${event.kind} ${eventColorClass(event.color)} ${event.completedAt ? 'completed' : ''} ${block.compact ? 'compact' : ''}`}
     style={laneStyle(block)}
     aria-label={eventAriaLabel(event)}
     title={`${event.title} · ${eventTimeRange(event)}`}
@@ -50,7 +54,7 @@ export function WeekEventButton({ event, block, onPointerDown, onOpen, wasDrag }
 
 /** The ghost of an event being dragged, at its would-be time, laid out in the same lanes as the events it would join. */
 export function WeekMoveGhost({ event, start, end, block }: { event: CalendarEvent; start: Date; end: Date; block: WeekBlock }) {
-  return <span className={`week-event ${event.kind} move-preview ${block.compact ? 'compact' : ''}`} style={laneStyle(block)} aria-hidden="true">
+  return <span className={`week-event ${event.kind} ${eventColorClass(event.color)} move-preview ${block.compact ? 'compact' : ''}`} style={laneStyle(block)} aria-hidden="true">
     <WeekEventFace event={event} start={start} end={end} block={block} />
   </span>
 }

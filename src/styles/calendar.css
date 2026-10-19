@@ -222,11 +222,13 @@
 .calendar-context-details .calendar-context-place { overflow-wrap: anywhere; }
 .calendar-context-details .calendar-context-duration { display: inline; color: var(--text-muted); font-weight: 400; }
 .calendar-context-details .calendar-context-overdue { color: var(--event-overdue-fg); font-weight: 600; }
-/* Actions: the main one (join, copy, complete or reopen) on its own row, then 'Đổi giờ' and the rest. */
+/* Actions: the main one (join, copy, complete or reopen) on its own row, then 'Đổi giờ' / 'Nhân bản' and the rest
+   (two per row; 'Mở trang chi tiết' takes a full row). */
 .calendar-context-buttons { display: grid; gap: 8px; }
 .calendar-context-main { display: grid; }
 .calendar-context-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
-.calendar-context-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.calendar-context-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.calendar-context-row .calendar-context-wide { grid-column: 1 / -1; }
 .calendar-context-row:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .calendar-context-buttons :is(button, a) { min-height: 40px; padding: 0 10px; gap: 6px; box-shadow: none; }
 .reschedule-hint { margin: 0; }
