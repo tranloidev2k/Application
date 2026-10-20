@@ -53,10 +53,14 @@ export function assignLanes<T extends { top: number; height: number }>(blocks: T
   return placed
 }
 
-/** Inline position of a laned block: `lane/lanes` across the column with a 2px gutter on each side. */
+/**
+ * Inline position of a laned block: `lane/lanes` across the column with a 2px gutter on each side, and drawn 1px in
+ * from its top and bottom so back-to-back events (10:00–11:00, 11:00–12:00) keep a 2px gap. Overlap detection
+ * still uses the exact geometry.
+ */
 export const laneStyle = ({ top, height, lane, lanes }: WeekBlockGeometry & WeekBlockLane) => ({
-  top,
-  height,
+  top: top + 1,
+  height: Math.max(height - 2, 0),
   left: `calc(${lane * 100 / lanes}% + 2px)`,
   width: `calc(${100 / lanes}% - 4px)`,
 })
