@@ -19,7 +19,7 @@ export function CalendarToolbar({ view, title, showingToday, onToday, onStep, on
       <button type="button" className={`secondary today-button ${showingToday ? 'is-current' : ''}`} onClick={onToday}>Hôm nay</button>
       <button type="button" className="icon-button" onClick={() => onStep(-1)} aria-label={`${unit} trước`} title={`${unit} trước`}><ChevronLeft size={20} /></button>
       <button type="button" className="icon-button" onClick={() => onStep(1)} aria-label={`${unit} sau`} title={`${unit} sau`}><ChevronRight size={20} /></button>
-      <h2 aria-live="polite">{title}</h2>
+      <h1 aria-live="polite">{title}</h1>
     </div>
     <CalendarLegend />
     <div className="calendar-toolbar-actions">

@@ -12,7 +12,7 @@
 .calendar-toolbar { container-type: inline-size; flex: none; min-height: 68px; padding: 10px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
 .calendar-toolbar-row { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .calendar-navigation { display: flex; align-items: center; gap: 8px; }
-.calendar-navigation h2 { min-width: 210px; margin: 0 0 0 8px; color: var(--text); font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -.5px; white-space: nowrap; }
+.calendar-navigation h1 { min-width: 210px; margin: 0 0 0 8px; color: var(--text); font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -.5px; white-space: nowrap; }
 .calendar-navigation .icon-button { border: 0; border-radius: 50%; }
 .today-button { min-height: 40px; padding: 0 17px; }
 .calendar-navigation .today-button { border-radius: 22px; }
@@ -35,7 +35,7 @@
 .calendar-legend-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--kind-line, var(--text-subtle)); }
 @container (max-width: 960px) {
   .calendar-toolbar-row { flex-wrap: wrap; }
-  .calendar-navigation h2 { min-width: 0; font-size: 19px; }
+  .calendar-navigation h1 { min-width: 0; font-size: 19px; }
   .calendar-legend { order: 3; flex-basis: 100%; justify-content: flex-start; }
 }
 
@@ -256,7 +256,7 @@
 @media (max-width: 580px) {
   .calendar-page { padding: 6px; }
   .calendar-shell { border-radius: 13px; }
-  .calendar-navigation h2 { min-width: 180px; font-size: 18px; }
+  .calendar-navigation h1 { min-width: 180px; font-size: 18px; }
   .calendar-toolbar-actions > .primary { padding: 0 13px; }
   .calendar-legend { display: none; }
 }

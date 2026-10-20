@@ -1,0 +1,83 @@
+/* ==== Editorial-greeting restyle (design-taste-frontend, app rules) =====
+   The frame (sidebar + top bar) shares the warm paper ground with no rule between them;
+   the page lives on one white sheet inset 8px from the window's right and bottom edges.
+   Colour sits on data and status; the teal accent is kept under 2% of the screen.
+   ======================================================================== */
+
+body { background: var(--bg); color: var(--text); font-family: var(--font-sans); }
+.num, time, .count-pill, .kpi-value, .calendar-day-number, .week-header strong,
+.week-time-axis, .week-event time, .calendar-event time, table, .pipeline { font-variant-numeric: tabular-nums; }
+
+/* -- Frame and sheet -- */
+.sidebar { background: var(--bg); border-right: 0; }
+.topbar { background: var(--bg); border-bottom: 0; backdrop-filter: none; }
+@media (min-width: 851px) {
+  .app-main { padding-right: 8px; padding-bottom: 8px; }
+  .app-main > main { min-height: calc(100vh - 80px); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+}
+.logo-mark { box-shadow: none; background: var(--accent); border-radius: 10px; }
+.nav-item { color: var(--text-muted); }
+.nav-item:hover { background: var(--line); }
+.nav-item.active { background: #e8eaec; }
+.nav-item.active::before { display: none; }
+.nav-item .count-pill { background: var(--surface); }
+
+/* -- Titles: app titles are 24px; the greeting is the one serif moment -- */
+.page-header h1 { font-size: 24px; font-weight: 500; letter-spacing: -.3px; line-height: 1.25; }
+.form-page .page-header h1 { font-size: 24px; letter-spacing: -.3px; }
+.dashboard-greeting h1 { font-family: var(--font-display); font-size: 48px; font-weight: 400; letter-spacing: -.5px; line-height: 1.05; }
+.calendar-navigation h1 { font-size: 22px; font-weight: 500; letter-spacing: -.3px; }
+
+/* -- Controls: flat, one fill, fully round -- */
+.primary, .secondary, .danger-button { border-radius: var(--r-pill); box-shadow: none; font-weight: 500; }
+.primary:hover { transform: none; }
+.compact { min-height: 36px; }
+.field input, .field select, .field textarea, .search-box, .select-control { border-radius: 10px; }
+
+/* -- Surfaces: flat panels on a tone step, no shadow at rest -- */
+.panel, .table-panel, .next-card, .board-card, .calendar-shell { box-shadow: none; }
+.panel, .table-panel { border-color: var(--line); }
+.next-card:hover, .board-card:hover { box-shadow: none; border-color: var(--line-strong); }
+.calendar-shell { border-color: var(--line); }
+
+/* -- Text the inspector found too faint or too small -- */
+.calendar-view-switch button, .segmented button { color: var(--text-muted); }
+.dashboard-greeting p, .dashboard-greeting time { color: var(--text-muted); }
+.week-event time, .week-event small, .calendar-event time { font-size: 12px; }
+
+/* -- Phone: the sheet is the screen; text keeps a 16px margin -- */
+@media (max-width: 850px) {
+  .page { padding-left: 18px; padding-right: 18px; }
+  .calendar-toolbar { padding-left: 16px; padding-right: 16px; }
+}
+
+/* -- No icons in tinted squares: an icon, where it helps, is plain and in the text colour -- */
+.empty-state > span, .empty-state.onboarding > span, .empty-tab > span, .empty-mini > span,
+.onboarding-step-icon, .getting-started-icon, .getting-started > span, .getting-started-mark {
+  background: transparent; color: var(--text-muted);
+}
+.empty-state.onboarding > span { color: var(--accent); }
+/* Selected states are a tone step, not a glow */
+.segmented button.active, .segmented button[aria-pressed="true"], .segmented button[aria-selected="true"], .calendar-view-switch button.active,
+.calendar-view-switch button[aria-pressed="true"] { box-shadow: none; }
+.status-choice.selected { box-shadow: none; }
+/* The sticky save bar sits on the sheet: a rule on top, no floating shadow */
+.form-actions { box-shadow: none; }
+
+/* -- Round 3 (look step): icons plain, figures at regular weight, no eyebrows, one frame -- */
+.next-card-icon, .kpi-icon, .next-step-icon, .timeline-icon,
+.next-step-icon.interview, .next-step-icon.deadline, .timeline-icon.status, .timeline-icon.note,
+.timeline-icon.interview, .timeline-icon.task {
+  width: auto; height: auto; background: transparent; border-radius: 0;
+}
+.next-card-icon, .kpi-icon, .next-step-icon { color: var(--text-muted); }
+.next-card-icon { color: var(--tone-fg, var(--text-muted)); }
+.next-step-item.overdue .next-step-icon { background: transparent; color: var(--danger); }
+.timeline-icon { width: 31px; background: var(--surface); }
+.kpi-tile strong, .kpi-value { font-size: 32px; font-weight: 400; letter-spacing: -.5px; }
+.eyebrow, .detail-hero .eyebrow { color: var(--text-muted); font-size: var(--fs-base); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.task-group-title { text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); }
+/* The calendar is the sheet's content, not a card on a grey band */
+.calendar-page { background: transparent; padding: 0; }
+.calendar-shell { border: 0; border-radius: 16px; }
+@media (max-width: 850px) { .calendar-page { padding: 12px 16px; } }
