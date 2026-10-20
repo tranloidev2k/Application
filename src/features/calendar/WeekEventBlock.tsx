@@ -7,7 +7,7 @@ import { laneStyle, WeekBlockGeometry, WeekBlockLane, weekBlockGeometry } from '
 
 type WeekBlock = WeekBlockGeometry & WeekBlockLane
 
-const subtitle = (event: CalendarEvent) => event.application?.companyName ?? 'Việc cá nhân'
+const subtitle = (event: CalendarEvent) => event.application?.companyName
 /** Room for the third line (the company): 4px padding + three 16px lines. */
 const SUBTITLE_HEIGHT = 52
 
@@ -22,7 +22,7 @@ function WeekEventFace({ event, start, end, block }: { event: CalendarEvent; sta
     <span>{event.title}</span>
   </strong>
   if (block.compact) return <>{title}<time>· {formatTime(start)}</time></>
-  return <>{title}<time>{formatTime(start)}–{formatTime(end)}</time>{block.height >= SUBTITLE_HEIGHT && <small>{subtitle(event)}</small>}</>
+  return <>{title}<time>{formatTime(start)}–{formatTime(end)}</time>{block.height >= SUBTITLE_HEIGHT && subtitle(event) && <small>{subtitle(event)}</small>}</>
 }
 
 /**
