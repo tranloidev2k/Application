@@ -16,9 +16,9 @@ export function Sidebar({ route, open, close, collapsed, toggleCollapsed }: { ro
   const activeBadge: NavBadge | undefined = activeCount ? { count: activeCount, label: 'đơn đang hoạt động' } : undefined
   const overdueBadge: NavBadge | undefined = overdueCount ? { count: overdueCount, label: 'việc quá hạn', tone: 'danger' } : undefined
   const items = [
+    { label: 'Lịch công việc', icon: CalendarDays, href: '/calendar', active: route.page === 'calendar', badge: overdueBadge },
     { label: 'Tổng quan', icon: LayoutDashboard, href: '/', active: route.page === 'dashboard' },
     { label: 'Đơn ứng tuyển', icon: BriefcaseBusiness, href: '/applications', active: ['applications', 'detail', 'edit', 'new'].includes(route.page), badge: activeBadge },
-    { label: 'Lịch công việc', icon: CalendarDays, href: '/calendar', active: route.page === 'calendar', badge: overdueBadge },
   ]
   return <>
     {open && <button type="button" className="nav-scrim" onClick={close} aria-label="Đóng menu" />}
