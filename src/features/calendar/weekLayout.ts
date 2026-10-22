@@ -1,7 +1,7 @@
 import { HOUR_HEIGHT, minuteOfDay, WEEK_GRID_HEIGHT } from './calendarUtils'
 
-/** The shortest block drawn in the week grid; shorter events still get this much room for one line of text. */
-const MIN_EVENT_HEIGHT = 20
+/** The shortest block drawn in the week grid: 15 minutes, the snap step, so back-to-back 15-minute events stack in one lane. */
+const MIN_EVENT_HEIGHT = 15 / 60 * HOUR_HEIGHT
 /** Events shorter than 40 minutes (or clipped at midnight to less) render on one line: 'Tiêu đề · 16:00'. */
 const COMPACT_HEIGHT = 40 / 60 * HOUR_HEIGHT
 

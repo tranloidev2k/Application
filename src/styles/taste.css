@@ -147,3 +147,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-sans);
 .week-column.today, .calendar-day.today { background: rgba(255, 255, 255, .025); }
 .skeleton { background-color: var(--line); }
 .monogram { background: hsl(var(--mono-h) 35% 22%); color: hsl(var(--mono-h) 70% 82%); }
+/* Short events also carry .compact: they must keep their real height, not the compact button's 36px minimum,
+   or they overlap the next event. */
+.week-event.compact { min-height: 0; padding-top: 1px; padding-bottom: 1px; }
+.week-event.compact strong, .week-event.compact time { line-height: 13px; font-size: 11.5px; }
